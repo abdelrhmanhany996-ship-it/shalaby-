@@ -11,6 +11,8 @@ const drawingFallback: Partial<Record<ZakiMood, ZakiMood>> = {
 
 /** Drop PNG/WebP files named after each mood into public/zaki/ and they replace the built-in drawing automatically. */
 const FILE_BASE = "/zaki/";
+// Bump when the pictures change: browsers keep images for a week, so a new version needs a new address.
+const ART_VERSION = "shalaby-1";
 const known = new Map<string, "ok" | "bad">();
 
 function useArt(mood: ZakiMood) {
@@ -29,7 +31,7 @@ function useArt(mood: ZakiMood) {
       known.set(mood, "bad");
       if (alive) setState("bad");
     };
-    img.src = `${FILE_BASE}${mood}.png`;
+    img.src = `${FILE_BASE}${mood}.png?v=${ART_VERSION}`;
     return () => {
       alive = false;
     };
@@ -205,7 +207,7 @@ export function ZakiAvatar({ mood = "idle", size = 64, className = "" }: { mood?
   return (
     <span className={`zaki-avatar-art ${className}`} style={{ width: size, height: size }}>
       {art === "loading" ? null : art === "ok" ? (
-        <img src={`${FILE_BASE}${mood}.png`} alt="شلبي" draggable={false} className={`zaki-img zaki-mood-${mood}`} />
+        <img src={`${FILE_BASE}${mood}.png?v=${ART_VERSION}`} alt="شلبي" draggable={false} className={`zaki-img zaki-mood-${mood}`} />
       ) : (
         <ZakiDrawing mood={drawingFallback[mood] ?? mood} />
       )}
