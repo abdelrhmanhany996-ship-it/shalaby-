@@ -1,0 +1,372 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------- helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profilePath() {
+      return /databases/$(database)/documents/authProfiles/$(request.auth.uid);
+    }
+
+    // Active staff member with a server-trusted access record (authProfiles/{uid}).
+    function isStaff() {
+      return signedIn() && exists(profilePath()) && get(profilePath()).data.active == true;
+    }
+
+    function role() {
+      return get(profilePath()).data.role;
+    }
+
+    function isTop() {
+      return isStaff() && role() in ['admin', 'general_manager'];
+    }
+
+    function isRegional() {
+      return isStaff() && role() in ['admin', 'general_manager', 'regional_manager'];
+    }
+
+    function isManager() {
+      return isStaff() && role() in ['admin', 'general_manager', 'regional_manager', 'branch_manager'];
+    }
+
+    // Only the developer ('admin') may create or change developer / general-manager accounts.
+    function mayGrant(r) {
+      return role() == 'admin' || !(r in ['admin', 'general_manager']);
+    }
+
+    // The general sales manager runs the people below the owner: edits their records, never the owner, developer or peers.
+    function isGsmEdit(oldRole, newRole) {
+      return isStaff() && role() == 'regional_manager'
+        && !(oldRole in ['admin', 'general_manager', 'regional_manager'])
+        && !(newRole in ['admin', 'general_manager', 'regional_manager']);
+    }
+
+    function isBranchManager() {
+      return isStaff() && role() == 'branch_manager';
+    }
+
+    function myBranch() {
+      return get(profilePath()).data.branchId;
+    }
+
+    // A branch manager may only manage low-privilege staff inside their own branch.
+    function isLowRole(r) {
+      return r in ['supervisor', 'team_leader', 'sales_agent'];
+    }
+
+    function branchManagerMayWrite(data) {
+      return isBranchManager() && isLowRole(data.role) && data.branchId == myBranch()
+        && data.get('supervisedBranchIds', []).size() == 0;
+    }
+
+    // ---------- row-level scope ----------
+    function profile() {
+      return get(profilePath()).data;
+    }
+
+    function isSalesRole() {
+      return profile().role in ['sales_agent', 'team_leader'];
+    }
+
+    function supervised() {
+      return profile().get('supervisedBranchIds', []);
+    }
+
+    // Directors and the general sales manager (regional_manager) see every branch, including new ones.
+    function seesAll() {
+      return profile().role in ['admin', 'general_manager', 'regional_manager'];
+    }
+
+    // The branches a person works in (for array checks such as brokers).
+    function scopeBranches() {
+      return profile().role == 'supervisor' && supervised().size() > 0
+        ? supervised()
+        : [profile().get('branchId', '')];
+    }
+
+    function branchOk(b) {
+      return seesAll() || b in scopeBranches();
+    }
+
+    // A data row: inside the person's branches, and their own row if they are a salesperson.
+    function rowOk(d, ownerField) {
+      return isStaff() && branchOk(d.branchId) && (!isSalesRole() || d.get(ownerField, '') == profile().userId);
+    }
+
+    // A salesperson handling a follow-up on a colleague's customer in their branch.
+    function delegatedOk(d) {
+      return isStaff() && isSalesRole() && branchOk(d.branchId) && profile().userId in d.get('delegatedTo', []);
+    }
+
+    // The person who ran the first-time setup (meta/bootstrap.createdBy), restoring their own developer record.
+    function isFounder(uid) {
+      return signedIn() && request.auth.uid == uid
+        && exists(/databases/$(database)/documents/meta/bootstrap)
+        && get(/databases/$(database)/documents/meta/bootstrap).data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.role == 'admin'
+        && request.resource.data.uid == uid
+        && request.resource.data.active == true;
+    }
+
+    // ---------- access control ----------
+    match /meta/{docId} {
+      // Lets the login screen know whether first-run setup is still needed.
+      allow get: if true;
+      allow create: if docId == 'bootstrap' && isTop()
+                    && !exists(/databases/$(database)/documents/meta/bootstrap);
+      allow update, delete: if false;
+    }
+
+    match /authProfiles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isRegional() || isBranchManager());
+
+      allow create: if (isTop() && mayGrant(request.resource.data.role))
+        || branchManagerMayWrite(request.resource.data)
+        // First-run only: the very first account may make itself developer.
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.role == 'admin'
+            && request.resource.data.uid == uid
+            && !exists(/databases/$(database)/documents/meta/bootstrap))
+        // The account that set the system up can always restore its own developer record.
+        || isFounder(uid);
+
+      allow update: if (isTop() && mayGrant(request.resource.data.role) && mayGrant(resource.data.role))
+        || isGsmEdit(resource.data.role, request.resource.data.role)
+        || (branchManagerMayWrite(request.resource.data) && isLowRole(resource.data.role)
+            && resource.data.branchId == myBranch())
+        || isFounder(uid)
+        // After an admin reset, the person may clear their own "must change password" flag.
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword'])
+            && request.resource.data.mustChangePassword == false);
+
+      allow delete: if isStaff() && role() == 'admin';
+    }
+
+    // ---------- people & structure ----------
+    match /users/{docId} {
+      // Colleagues in your own branches, and yourself.
+      allow read: if isStaff() && (seesAll() || resource.data.get('id', '') == profile().userId || branchOk(resource.data.get('branchId', '')));
+      allow create: if (isTop() && mayGrant(request.resource.data.role)) || branchManagerMayWrite(request.resource.data);
+      allow update: if (isTop() && mayGrant(request.resource.data.role) && mayGrant(resource.data.role))
+        || isGsmEdit(resource.data.role, request.resource.data.role)
+        || branchManagerMayWrite(request.resource.data);
+      allow delete: if isTop() && mayGrant(resource.data.role);
+    }
+
+    match /branches/{docId} {
+      allow read: if isStaff();
+      allow write: if isRegional();
+    }
+
+    match /teams/{docId} {
+      allow read: if isStaff();
+      allow write: if isManager();
+    }
+
+    match /companies/{docId} {
+      allow read: if isStaff();
+      allow write: if isTop();
+    }
+
+    match /governorates/{docId} {
+      allow read: if isStaff();
+      allow write: if isTop();
+    }
+
+    match /warehouses/{docId} {
+      allow read: if isStaff();
+      allow write: if isTop();
+    }
+
+    match /departments/{docId} {
+      allow read: if isStaff();
+      allow write: if isTop();
+    }
+
+    match /jobPositions/{docId} {
+      allow read: if isStaff();
+      allow write: if isTop();
+    }
+
+    match /purchaseCategories/{docId} {
+      allow read: if isStaff();
+      allow write: if isTop();
+    }
+
+    match /courses/{docId} {
+      allow read: if isStaff();
+      allow write: if isTop();
+    }
+
+    match /settings/{docId} {
+      allow read: if isStaff();
+      // The plan (how many branches) is set by the developer only.
+      allow write: if isTop() && (docId != 'license' || role() == 'admin');
+    }
+
+    // ---------- day-to-day sales data: every row is scoped on the server ----------
+    // Managers see the branches in their scope; salespeople see only the rows they own.
+    // The app asks only for what these rules allow, so nothing outside a person's scope ever reaches the browser.
+
+    match /leads/{docId} {
+      allow read: if rowOk(resource.data, 'assignedAgentId') || delegatedOk(resource.data);
+      allow create: if rowOk(request.resource.data, 'assignedAgentId');
+      allow update: if (rowOk(resource.data, 'assignedAgentId') && rowOk(request.resource.data, 'assignedAgentId'))
+        // Someone handling a follow-up on a colleague's customer may update it, but not take it over or move it.
+        || (delegatedOk(resource.data)
+            && request.resource.data.assignedAgentId == resource.data.assignedAgentId
+            && request.resource.data.branchId == resource.data.branchId);
+      allow delete: if isManager() && branchOk(resource.data.branchId);
+    }
+
+    match /followUps/{docId} {
+      allow read: if rowOk(resource.data, 'assignedAgentId');
+      allow create: if rowOk(request.resource.data, 'assignedAgentId');
+      allow update: if rowOk(resource.data, 'assignedAgentId') && rowOk(request.resource.data, 'assignedAgentId');
+      allow delete: if isManager() && branchOk(resource.data.branchId);
+    }
+
+    match /visits/{docId} {
+      allow read: if rowOk(resource.data, 'receivedByAgentId');
+      allow create: if rowOk(request.resource.data, 'receivedByAgentId');
+      allow update: if rowOk(resource.data, 'receivedByAgentId') && rowOk(request.resource.data, 'receivedByAgentId');
+      allow delete: if isManager() && branchOk(resource.data.branchId);
+    }
+
+    match /bookings/{docId} {
+      allow read: if rowOk(resource.data, 'agentId');
+      allow create: if rowOk(request.resource.data, 'agentId');
+      allow update: if rowOk(resource.data, 'agentId') && rowOk(request.resource.data, 'agentId');
+      allow delete: if isManager() && branchOk(resource.data.branchId);
+    }
+
+    match /purchaseInvoices/{docId} {
+      allow read: if rowOk(resource.data, 'agentId');
+      allow create: if rowOk(request.resource.data, 'agentId');
+      allow update: if rowOk(resource.data, 'agentId') && rowOk(request.resource.data, 'agentId');
+      allow delete: if isManager() && branchOk(resource.data.branchId);
+    }
+
+    match /notBoughtRecords/{docId} {
+      allow read: if rowOk(resource.data, 'agentId');
+      allow create: if rowOk(request.resource.data, 'agentId');
+      allow update: if rowOk(resource.data, 'agentId') && rowOk(request.resource.data, 'agentId');
+      allow delete: if isManager() && branchOk(resource.data.branchId);
+    }
+
+    // Brokers belong to the branches that work with them.
+    match /brokers/{docId} {
+      allow read: if isStaff() && (seesAll() || resource.data.get('branchIds', []).hasAny(scopeBranches()));
+      allow create: if isStaff() && (seesAll() || request.resource.data.get('branchIds', []).hasAny(scopeBranches()));
+      allow update: if isStaff()
+        && (seesAll() || (resource.data.get('branchIds', []).hasAny(scopeBranches())
+                          && request.resource.data.get('branchIds', []).hasAny(scopeBranches())));
+      allow delete: if isManager() && (seesAll() || resource.data.get('branchIds', []).hasAny(scopeBranches()));
+    }
+
+    // Customer review links: the document id IS the secret token in the link.
+    // A customer (no login) may read their own request and answer it exactly once;
+    // staff may only cancel it, mark the 48h nudge, or attach the AI analysis.
+    // Zaki's follow-up suggestions: a person's own; created pending (or "checked"), then decided once.
+    match /aiSuggestions/{docId} {
+      allow read: if rowOk(resource.data, 'agentId');
+      allow create: if rowOk(request.resource.data, 'agentId')
+        && request.resource.data.agentId == profile().userId
+        && request.resource.data.status in ['pending', 'checked'];
+      allow update: if rowOk(resource.data, 'agentId')
+        && resource.data.agentId == profile().userId
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['accepted', 'rejected']
+        && request.resource.data.agentId == resource.data.agentId
+        && request.resource.data.branchId == resource.data.branchId;
+    }
+
+    // "Done" marks on reminders: a person's own, never edited or removed.
+    match /reminderDone/{docId} {
+      allow read: if rowOk(resource.data, 'agentId');
+      allow create: if rowOk(request.resource.data, 'agentId')
+        && request.resource.data.agentId == profile().userId;
+    }
+
+    match /reviewRequests/{docId} {
+      allow get: if true;
+      allow list: if rowOk(resource.data, 'agentId');
+      allow create: if rowOk(request.resource.data, 'agentId')
+        && docId.size() >= 20
+        && request.resource.data.status == 'sent'
+        && !('response' in request.resource.data);
+      allow update: if (
+          resource.data.status == 'sent'
+          && request.resource.data.status == 'answered'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'response', 'answeredAt', 'isComplaint'])
+          && request.resource.data.isComplaint is bool
+          && request.resource.data.response.rating is int
+          && request.resource.data.response.rating >= 1
+          && request.resource.data.response.rating <= 5
+          && request.resource.data.response.keys().hasOnly(['rating', 'treatment', 'price', 'quality', 'wouldRecommend', 'comment', 'referral'])
+          && (!('comment' in request.resource.data.response) || request.resource.data.response.comment.size() <= 1500)
+          && (!('referral' in request.resource.data.response) || (
+                request.resource.data.response.rating >= 4
+                && request.resource.data.response.referral.keys().hasOnly(['name', 'phone'])
+                && request.resource.data.response.referral.name is string
+                && request.resource.data.response.referral.name.size() > 0
+                && request.resource.data.response.referral.name.size() <= 80
+                && request.resource.data.response.referral.phone is string
+                && request.resource.data.response.referral.phone.size() >= 10
+                && request.resource.data.response.referral.phone.size() <= 20))
+        ) || (
+          rowOk(resource.data, 'agentId')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reminderSentAt', 'cancelReason', 'cancelledAt', 'ai', 'referralLeadId'])
+          && (request.resource.data.status == resource.data.status
+              || (resource.data.status == 'sent' && request.resource.data.status == 'cancelled'))
+        );
+      allow delete: if isStaff() && role() == 'admin';
+    }
+
+    // Complaint follow-ups are append-only and written by managers of that branch.
+    match /reviewNotes/{docId} {
+      allow read: if rowOk(resource.data, 'agentId');
+      allow create: if isStaff()
+        && !isSalesRole()
+        && branchOk(request.resource.data.branchId)
+        && request.resource.data.byId == profile().userId
+        && request.resource.data.kind in ['note', 'resolved']
+        && request.resource.data.text.size() <= 2000;
+      allow update: if false;
+      allow delete: if isStaff() && role() == 'admin';
+    }
+
+    match /notifications/{docId} {
+      allow read: if isStaff() && (isTop() || resource.data.get('targetUserId', '') == profile().userId);
+      allow create: if isStaff();
+      allow update, delete: if isStaff() && (isTop() || resource.data.get('targetUserId', '') == profile().userId);
+    }
+
+    // Customer history: append-only. Managers may re-point it when a customer is reassigned.
+    match /timelineEvents/{docId} {
+      allow read: if isStaff() && branchOk(resource.data.branchId)
+        && (!isSalesRole() || resource.data.leadOwnerId == profile().userId || resource.data.authorId == profile().userId);
+      allow create: if isStaff() && branchOk(request.resource.data.branchId)
+        && (!isSalesRole() || request.resource.data.leadOwnerId == profile().userId || request.resource.data.authorId == profile().userId);
+      allow update: if isStaff() && !isSalesRole()
+        && branchOk(resource.data.branchId) && branchOk(request.resource.data.branchId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['leadOwnerId', 'branchId']);
+      allow delete: if isTop();
+    }
+
+    // The audit trail is readable by top management only and can't be edited.
+    match /activityLogs/{docId} {
+      allow read: if isTop();
+      allow create: if isStaff() && (isTop() || request.resource.data.userId == profile().userId);
+      allow update, delete: if false;
+    }
+  }
+}

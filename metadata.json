@@ -1,0 +1,6 @@
+{
+  "name": "SHALABY | نظام إدارة العملاء والمبيعات والفروع",
+  "description": "نظام SHALABY المتكامل لإدارة العملاء والمبيعات والفروع والموظفين والمتابعات والزيارات والحجوزات والتقارير.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user account entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "phone": { "type": "string" },
+        "branchId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Customer lead or prospect",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsappPhone": { "type": "string" },
+        "branchId": { "type": "string" },
+        "status": { "type": "string" },
+        "classification": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "branchId", "status"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Company branch location",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "city": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "code"]
+    },
+    "Visit": {
+      "title": "Visit",
+      "description": "Customer branch visit record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "visitorName": { "type": "string" },
+        "phone": { "type": "string" },
+        "branchId": { "type": "string" },
+        "date": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["id", "visitorName", "phone", "branchId"]
+    },
+    "Broker": {
+      "title": "Broker",
+      "description": "Broker entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["id", "name", "phone"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of system users"
+    },
+    "/leads/{leadId}": {
+      "schema": { "$ref": "#/entities/Lead" },
+      "description": "Collection of customer leads"
+    },
+    "/branches/{branchId}": {
+      "schema": { "$ref": "#/entities/Branch" },
+      "description": "Collection of company branches"
+    },
+    "/visits/{visitId}": {
+      "schema": { "$ref": "#/entities/Visit" },
+      "description": "Collection of branch visits"
+    },
+    "/brokers/{brokerId}": {
+      "schema": { "$ref": "#/entities/Broker" },
+      "description": "Collection of brokers"
+    }
+  }
+}

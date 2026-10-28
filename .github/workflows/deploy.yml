@@ -1,0 +1,81 @@
+name: CI & Deploy
+
+# main -> https://shalaby.engsaber.space      (production)
+# dev  -> https://dev-shalaby.engsaber.space  (development / staging)
+# test -> https://test-shalaby.engsaber.space    (testing, separate Firebase project shalaby-test)
+# Promotion order: test -> dev -> main. dev deploys only when its code is identical to test; main only when identical to dev.
+# main also waits for approval on the 'production' environment (set required reviewers in GitHub).
+# Pull requests only run the checks (lint, tests, build); nothing is deployed.
+
+on:
+  push:
+    branches: [main, dev, test]
+  pull_request:
+    branches: [main, dev, test]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build
+        env:
+          VITE_APP_ENV: ${{ github.ref_name == 'test' && 'test' || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          include-hidden-files: true
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'test' && 'test' || 'development' }}
+    env:
+      # Folder of each subdomain on Hostinger, relative to the FTP account root.
+      SERVER_DIR_MAIN: domains/shalaby.engsaber.space/public_html/
+      SERVER_DIR_DEV: domains/dev-shalaby.engsaber.space/public_html/
+      SERVER_DIR_TEST: domains/test-shalaby.engsaber.space/public_html/
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Promotion gate (test -> dev -> main)
+        run: |
+          case "$GITHUB_REF_NAME" in
+            dev)  prev=test ;;
+            main) prev=dev ;;
+            *)    exit 0 ;;
+          esac
+          git fetch origin "$prev"
+          if ! git diff --quiet "origin/$prev" HEAD -- . ':!.github'; then
+            echo "::error::$GITHUB_REF_NAME can only be deployed after the same code is deployed to $prev. Merge $prev first."
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Deploy over FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./dist/
+          server-dir: ${{ github.ref_name == 'main' && env.SERVER_DIR_MAIN || github.ref_name == 'test' && env.SERVER_DIR_TEST || env.SERVER_DIR_DEV }}

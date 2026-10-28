@@ -1,0 +1,9 @@
+{
+  "projectId": "shalaby-group",
+  "appId": "REPLACE_WITH_FIREBASE_APP_ID",
+  "apiKey": "REPLACE_WITH_FIREBASE_API_KEY",
+  "authDomain": "shalaby-group.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "shalaby-group.firebasestorage.app",
+  "messagingSenderId": "REPLACE_WITH_SENDER_ID"
+}
