@@ -70,6 +70,15 @@ jobs:
         with:
           name: dist
           path: dist
+      - name: Point the PHP helpers at this environment's Firebase project
+        # api/ai.php and api/admin.php carry the project id as a constant. Set the repository variable
+        # FIREBASE_PROJECT_TEST / _DEV / _MAIN to the environment's project id; when unset nothing changes.
+        env:
+          PROJECT_ID: ${{ github.ref_name == 'main' && vars.FIREBASE_PROJECT_MAIN || github.ref_name == 'test' && vars.FIREBASE_PROJECT_TEST || vars.FIREBASE_PROJECT_DEV }}
+        run: |
+          if [ -n "$PROJECT_ID" ]; then
+            sed -i "s/const FIREBASE_PROJECT_ID = '[^']*';/const FIREBASE_PROJECT_ID = '$PROJECT_ID';/" dist/api/ai.php dist/api/admin.php
+          fi
       - name: Deploy over FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
