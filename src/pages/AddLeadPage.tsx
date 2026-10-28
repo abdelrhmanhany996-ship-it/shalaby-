@@ -1,6 +1,4 @@
 import { PageGuide } from "../components/common/PageGuide";
-import { BrokerSearch } from "../components/common/BrokerSearch";
-import { CustomerRatingModal } from "../components/common/CustomerRatingModal";
 import {
   canCreateCustomer,
   branchAgents,
@@ -13,7 +11,7 @@ import {
 } from "../lib/access";
 import { purchaseFromItems } from "../lib/purchases";
 import { OutcomeSection, emptyOutcome, outcomeError, type OutcomeState } from "../components/common/OutcomeSection";
-import { InterestPicker, interestNames } from "../components/common/InterestPicker";
+import { interestNames } from "../components/common/InterestPicker";
 import { NameWithTitle } from "../components/common/NameWithTitle";
 import { hasPermission } from "../lib/permissions";
 import { useState } from "react";
@@ -72,11 +70,13 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
   const initialBranch =
     effectiveUser.branchId || availableBranches[0]?.id || "";
   const [branchId, setBranchId] = useState(initialBranch);
-  const agents = branchAgents(users, branchId);
+  // Branches are no longer chosen in the CRM: the customer goes to the branch of the person responsible for them.
+  const agents = [...new Map(availableBranches.flatMap((b) => branchAgents(users, b.id)).map((u) => [u.id, u])).values()];
   const [agentId, setAgentId] = useState(defaultAgent(users, effectiveUser, initialBranch));
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [interests, setInterests] = useState<Department[]>(["decor"]);
+  // Business categories were taken out of the CRM: every new customer is filed under "general".
+  const [interests] = useState<Department[]>(["general"]);
   const department = interests[0];
   const [source, setSource] = useState<LeadSource>("walk_in");
   const [sameWhatsapp, setSameWhatsapp] = useState(true);
@@ -220,24 +220,7 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
           <span className="eyebrow">بداية علاقة جديدة</span>
           <h1>اتضاف {created.name}.</h1>
           <p>الخطوة الجاية: تواصل مع العميل أو حدد أول متابعة.</p>
-          {canRequestReview(effectiveUser, created) && (
-            <div className="review-offer">
-              <span>
-                <strong>تبعت للعميل لينك تقييم؟</strong>
-                <small>اختياري: رسالة واتساب جاهزة، وانت اللي بتدوس إرسال.</small>
-              </span>
-              <button className="btn-secondary" onClick={() => setReviewOpen(true)}>
-                <MessageCircle size={16} />
-                ابعت لينك التقييم
-              </button>
-            </div>
-          )}
-          <CustomerRatingModal
-            lead={created}
-            isOpen={reviewOpen}
-            onClose={() => setReviewOpen(false)}
-            subject={{ kind: "general", label: "تجربتك مع شلبي" }}
-          />
+
           <div className="success-actions">
             {canScheduleFollowUp(effectiveUser, created) && (
               <button
@@ -295,7 +278,7 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
       <PageGuide id="addCustomer" />
       {availableBranches.length === 0 && (
         <p className="notice warning" role="alert">
-          لسه مفيش أي فرع مسجّل. أضف الفرع الأول من «إدارة المؤسسة ← الهيكل الإداري»، وأضف موظفين من «الموظفون»، وبعدها سجّل عملاءك.
+          النظام لسه بيجهّز بياناته الأساسية. افتح الصفحة تاني بعد ثواني، ولو فضلت الرسالة دي كلّم المطوّر.
         </p>
       )}
       <form className="panel" onSubmit={submit} noValidate>
@@ -337,7 +320,6 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
                 </button>
               </div>
             )}
-            <InterestPicker value={interests} onChange={setInterests} />
             <label className="field">
               <span>عرفنا منين؟</span>
               <select
@@ -356,37 +338,25 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
         <details className="optional-section">
           <summary>
             <UserRound size={18} />
-            <span>الفرع والموظف المسؤول</span>
+            <span>الموظف المسؤول</span>
             <ChevronDown size={16} />
           </summary>
           <div className="optional-content">
             <p className="quiet-note" style={{ padding: "0 0 18px" }}>
-              محدد تلقائيًا:{" "}
-              {branches.find((b) => b.id === branchId)?.name || "لم يُحدد"} ·{" "}
-              {selectedAgent?.name || "لم يُحدد"}
+              محدد تلقائيًا: {selectedAgent?.name || "لم يُحدد"}
             </p>
             <div className="field-grid">
-              <label className="field">
-                <span>الفرع</span>
-                <select
-                  aria-label="فرع العميل"
-                  value={branchId}
-                  onChange={(e) => changeBranch(e.target.value)}
-                >
-                  {availableBranches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className="field">
                 <span>الموظف المسؤول</span>
                 <select
                   aria-label="الموظف المسؤول"
                   value={agentId}
                   disabled={!canAssignCustomers(effectiveUser)}
-                  onChange={(e) => setAgentId(e.target.value)}
+                  onChange={(e) => {
+                    setAgentId(e.target.value);
+                    const b = users.find((u) => u.id === e.target.value)?.branchId;
+                    if (b && availableBranches.some((x) => x.id === b)) setBranchId(b);
+                  }}
                 >
                   {[
                     ...agents,
@@ -456,65 +426,6 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
                 />
               </label>
             </div>
-          </div>
-        </details>
-        <details className="optional-section">
-          <summary>
-            <UserRound size={18} />
-            <span>
-              ربط وسيط أو جهة ترشيح <em className="optional-tag">اختياري</em>
-            </span>
-            <ChevronDown size={16} />
-          </summary>
-          <div className="optional-content">
-            {brokerMode !== "new" ? (
-              <BrokerSearch
-                label="الوسيط أو جهة الترشيح"
-                brokers={brokers}
-                value={brokerMode === "existing" ? brokerId : ""}
-                onChange={(id) => {
-                  setBrokerId(id);
-                  setBrokerMode(id ? "existing" : "none");
-                }}
-                onCreate={
-                  canCreateCustomer(effectiveUser)
-                    ? (name) => {
-                        setBrokerName(name);
-                        setBrokerId("");
-                        setBrokerMode("new");
-                      }
-                    : undefined
-                }
-              />
-            ) : (
-              <button type="button" className="btn-text" onClick={() => setBrokerMode("none")}>
-                ← دوّر في الوسطاء المسجلين بدل كده
-              </button>
-            )}
-            {brokerMode === "new" && (
-              <div className="field-grid" style={{ marginTop: 12 }}>
-                <label className="field">
-                  <span>
-                    اسم الوسيط <em>مطلوب عند الإضافة</em>
-                  </span>
-                  <input
-                    value={brokerName}
-                    onChange={(e) => setBrokerName(e.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>
-                    رقم هاتف الوسيط <em>مطلوب عند الإضافة</em>
-                  </span>
-                  <input
-                    type="tel"
-                    dir="ltr"
-                    value={brokerPhone}
-                    onChange={(e) => setBrokerPhone(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
           </div>
         </details>
         <details className="optional-section" open={!!outcome.result || undefined}>

@@ -78,8 +78,8 @@ export function OutcomeSection({
           <PurchaseCategorySelector
             items={value.items}
             onChange={(items) => set({ items })}
-            title="اشترى من إيه؟"
-            subtitle="دوس على القسم اللي اشترى منه واكتب دفع فيه كام بالجنيه"
+            title="اشترى بكام؟"
+            subtitle="اكتب المبلغ اللي دفعه بالجنيه"
           />
         </>
       )}

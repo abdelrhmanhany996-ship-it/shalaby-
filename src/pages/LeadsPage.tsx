@@ -286,7 +286,7 @@ export function LeadsPage({ onOpenLead, onNavigateAddLead }: Props) {
                       <td>{pill(l)}</td>
                       <td>
                         {l.assignedAgentName || "لم يُحدد"}
-                        <span className="table-secondary">{l.branchName}</span>
+
                       </td>
                       <td>
                         <span

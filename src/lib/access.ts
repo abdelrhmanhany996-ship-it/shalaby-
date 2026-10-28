@@ -206,7 +206,17 @@ export const canEditStaff = (actor: User, target: User, branches: Branch[]) =>
   (isGlobalManager(actor) ||
     actor.role === "regional_manager" ||
     (!!target.branchId && canSeeBranch(actor, target.branchId, branches)));
+/**
+ * Screens taken out of the simplified CRM (customers, follow-ups, targets, Shalaby AI). Their code and every record they
+ * wrote stay in place: nothing is deleted, the screens are simply not reachable. Remove a name here to bring a screen back.
+ */
+export const retiredPages = new Set([
+  "visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports",
+  "accounts", "telegram", "branches", "dept_dashboard", "teams", "analytics_dashboard",
+]);
+
 export function canAccessPage(u: User, page: string) {
+  if (retiredPages.has(page)) return false;
   // The Telegram groups directory is for everyone; only managers change it.
   if (["dashboard", "analytics_dashboard", "settings", "telegram"].includes(page))
     return true;

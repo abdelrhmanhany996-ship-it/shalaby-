@@ -50,7 +50,14 @@ export function DailyPlan({ onOpenLead }: { onOpenLead: (id: string) => void }) 
     setError("");
     const { snapshot: snap, fp: forFp } = latest.current;
     try {
-      const plan = await dailyPlan(snap);
+      const raw = await dailyPlan(snap);
+      // never trust the shape of a reply: a broken answer must not take the page down
+      const plan: Plan = {
+        headline: typeof raw?.headline === "string" ? raw.headline : "",
+        items: Array.isArray(raw?.items) ? raw.items.filter((x) => x && typeof x.leadId === "string").map((x) => ({ ...x, replies: Array.isArray(x.replies) ? x.replies : [] })) : [],
+        team: Array.isArray(raw?.team) ? raw.team.filter((x) => x && typeof x.name === "string") : [],
+        limits: typeof raw?.limits === "string" ? raw.limits : "",
+      };
       const entry = { plan, fp: forFp, at: Date.now() };
       cache.set(effectiveUser.id, entry);
       setShown(entry);

@@ -83,3 +83,11 @@ test("setting a target keeps history and stays one row per employee and month", 
   assert.throws(() => withAmount(undefined, user("u1"), "2026-10", -1, undefined, by, "t"));
   assert.throws(() => withAmount(undefined, user("u1", { branchId: undefined }), "2026-10", 1, undefined, by, "t"));
 });
+
+import { monthHistory } from "../src/lib/targets";
+test("month history lists the previous months oldest first with real figures", () => {
+  const t = [{ id: "a", userId: "u1", month: "2026-08", amount: 1000 }, { id: "b", userId: "u1", month: "2026-09", amount: 2000 }] as EmployeeTarget[];
+  const b = [booking({ id: "x", bookingDate: "2026-08-10", amount: 500 }), booking({ id: "y", bookingDate: "2026-09-10", amount: 2500 })];
+  const h = monthHistory("u1", "2026-10", 3, t, b, "2026-10-15", S);
+  assert.deepEqual(h.map((x) => [x.month, x.target, x.achieved, x.percent, x.state]), [["2026-07", 0, 0, 0, "no_target"], ["2026-08", 1000, 500, 50, "missed"], ["2026-09", 2000, 2500, 125, "achieved"]]);
+});

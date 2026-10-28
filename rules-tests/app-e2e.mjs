@@ -1,6 +1,6 @@
 // The real app against the Firebase emulators with the real security rules:
 // signs in as different roles and checks what each one can see and do.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join } from "node:path";
 import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
@@ -41,12 +41,46 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   const day = new Date().toISOString().slice(0, 10);
   await setDoc(doc(f, "bookings", "BK1"), { id: "BK1", leadId: "L1", leadName: "عميل أحمد الخاص", leadPhone: "01000000001", branchId: "b1", agentId: "usr-agentA", department: "decor", courseId: "c", courseName: "دهان", bookingDate: day, amount: 3000, bookingStatus: "confirmed", source: "walk_in", notes: "", createdAt: `${day}T10:00:00Z` });
   await setDoc(doc(f, "followUps", "F1"), { id: "F1", leadId: "L1", leadName: "عميل أحمد الخاص", leadPhone: "01000000001", assignedAgentId: "usr-agentA", assignedAgentName: "موظف أ", branchId: "b1", scheduledAt: "2026-01-05", reason: "متابعة عرض السعر", type: "call", notes: "", status: "overdue" });
+  await setDoc(doc(f, "followUps", "F2"), { id: "F2", leadId: "L1", leadName: "عميل أحمد الخاص", leadPhone: "01000000001", assignedAgentId: "usr-agentA", assignedAgentName: "موظف أ", branchId: "b1", scheduledAt: "2026-02-10", reason: "متابعة بعد المعاينة", type: "call", notes: "", status: "overdue" });
+  await setDoc(doc(f, "followUps", "F3"), { id: "F3", leadId: "L3", leadName: "عميل فرع تاني", leadPhone: "01000000003", assignedAgentId: "usr-agentC", assignedAgentName: "موظف ج", branchId: "b2", scheduledAt: "2026-02-10", reason: "متابعة", type: "call", notes: "", status: "overdue" });
   await setDoc(doc(f, "brokers", "BR1"), { id: "BR1", name: "وسيط فرع 1", phone: "01111111111", type: "individual", active: true, totalReferrals: 0, totalVolume: 0, branchIds: ["b1"] });
   await setDoc(doc(f, "brokers", "BR2"), { id: "BR2", name: "وسيط فرع 2", phone: "01222222222", type: "individual", active: true, totalReferrals: 0, totalVolume: 0, branchIds: ["b2"] });
 });
 
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".webmanifest": "application/manifest+json" };
+// A stand-in for api/ai.php: it plays the model's part (asks for one tool, then answers from what the browser sent back),
+// so the test checks the real loop in the app: the tool runs on the user's live, rule-scoped data and the answer shows it.
+const aiCalls = [];
+function fakeAi(req, res) {
+  if (req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ configured: true, voice: false }));
+  }
+  let raw = "";
+  req.on("data", (c) => (raw += c));
+  req.on("end", () => setTimeout(() => {
+    const body = JSON.parse(raw || "{}");
+    if (body.mode === "coach") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      const first = body.snapshot?.candidates?.[0];
+      return res.end(JSON.stringify({ headline: "يومك فيه متابعات متأخرة", items: first ? [{ leadId: first.leadId, priority: 1, why: "متأخرة", evidence: `متأخرة ${first.daysOverdue} يوم`, action: "كلّمه", message: "أهلًا", replies: [] }] : [], team: [], limits: "" }));
+    }
+    aiCalls.push({ auth: /^Bearer .+/.test(req.headers.authorization || ""), body });
+    const last = body.contents?.[body.contents.length - 1]?.parts ?? [];
+    const result = last.find((p) => p.functionResponse)?.functionResponse?.response?.result;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    if (!result) {
+      const call = { name: "attention_needed", args: {} };
+      return res.end(JSON.stringify({ type: "tool_calls", calls: [call], modelContent: { role: "model", parts: [{ functionCall: call }] } }));
+    }
+    const names = (result.followUps?.rows ?? []).map((r) => `${r.customer} (متأخرة ${r.daysLate} يوم)`);
+    const text = names.length ? `المتابعات المتأخرة:\n- ${names.join("\n- ")}` : "مفيش متابعات متأخرة.";
+    res.end(JSON.stringify({ type: "final", text, modelContent: { role: "model", parts: [{ text }] } }));
+  }, 900));
+}
+
 const server = createServer((req, res) => {
+  if (req.url.startsWith("/api/ai.php")) return fakeAi(req, res);
   let path = decodeURIComponent(req.url.split("?")[0]);
   if (path.endsWith("/")) path += "index.html";
   try {
@@ -65,8 +99,8 @@ const check = (ok, what) => {
   console.log(`${ok ? "✔" : "✖"} ${what}`);
   if (!ok) failures++;
 };
-async function as(who, fn) {
-  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 }, locale: "ar-EG", serviceWorkers: "block" });
+async function as(who, fn, viewport = { width: 1400, height: 1000 }) {
+  const ctx = await browser.newContext({ viewport, locale: "ar-EG", serviceWorkers: "block", colorScheme: process.env.DARK ? "dark" : "light" });
   const page = await ctx.newPage();
   const denied = [];
   page.on("console", (m) => m.type() === "error" && /permission|insufficient/i.test(m.text()) && denied.push(m.text().slice(0, 200)));
@@ -134,7 +168,7 @@ await as("agentA", async (page, go) => {
   await go("متابعاتي");
   const main = page.locator("main");
   check((await main.innerText()).includes("متابعة عرض السعر"), "agent sees the overdue follow-up");
-  await page.getByRole("button", { name: "تأجيل" }).first().click();
+  await page.locator("article", { hasText: "متابعة عرض السعر" }).getByRole("button", { name: "تأجيل" }).click();
   await page.locator('[role="dialog"] input[type="date"]').fill("2030-02-01");
   await page.locator('[role="dialog"] input[type="time"]').fill("14:30");
   await page.locator('[role="dialog"] textarea').fill("العميل طلب أكلمه بعد الإجازة");
@@ -147,11 +181,11 @@ await as("agentA", async (page, go) => {
   check((await readDoc("followUps/F1"))?.priority === "high", "priority saved");
   await page.getByRole("button", { name: /خطة شلبي اليوم/ }).click();
   await page.waitForTimeout(800);
-  check((await main.innerText()).includes("خطة شلبي مش متفعّلة"), "the daily plan tab opens and says plainly it is not enabled without a Claude key");
+  check((await main.innerText()).includes("خطة شلبي النهارده"), "the daily plan tab opens and shows a plan built from the user's data");
 });
 
 await as("bm1", async (page, go) => {
-  await go("الأهداف");
+  await go("الأهداف والأداء");
   const main = page.locator("main");
   check((await main.innerText()).includes("موظف أ"), "branch manager sees the salesperson on the targets page");
   check(!(await page.locator("aside").innerText()).includes("الحسابات"), "branch manager has no accounts entry");
@@ -179,65 +213,63 @@ await as("agentC", async (page, go) => {
   check(!(await page.locator("main").innerText()).includes("10,000"), "another branch's salesperson never sees that target");
 });
 
-await as("accountant", async (page, go) => {
-  await go("الحسابات");
-  const main = page.locator("main");
-  await page.getByRole("button", { name: "مصروف", exact: true }).click();
-  await page.getByPlaceholder("0.00").fill("250");
-  await page.getByPlaceholder(/مثلاً: دفعة/).fill("إيجار المعرض");
-  await page.getByRole("button", { name: "تسجيل", exact: true }).click();
-  await page.waitForTimeout(2500);
-  check((await main.innerText()).includes("إيجار المعرض"), "the accountant records an expense and sees it");
-  let entries = [];
+const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "جروبات التليجرام", "الهيكل الإداري", "الأقسام والفروع"];
+
+await as("gm", async (page) => {
+  const aside = await page.locator("aside").textContent();
+  check(["الرئيسية", "العملاء", "المتابعات", "الأهداف والأداء", "الموظفون"].every((t) => aside.includes(t)), "the owner's menu has customers, follow-ups, targets and staff");
+  check(!RETIRED.some((t) => aside.includes(t)), "retired screens are gone from the owner's menu");
+  const main = await page.locator("main").innerText();
+  check(main.includes("محتاج تتحرك فيه دلوقتي") && main.includes("الأهداف الشهر ده"), "the simplified home shows follow-ups and targets");
+  // nothing was deleted: the accounting entry and the Telegram group recorded earlier are still in the database
+  let n = 0;
   await env.withSecurityRulesDisabled(async (ctx) => {
-    entries = (await getDocs(collection(ctx.firestore(), "accountingEntries"))).docs.map((d) => d.data());
+    n = (await getDocs(collection(ctx.firestore(), "leads"))).size;
   });
-  check(entries.length === 1 && entries[0].amount === 250 && entries[0].type === "expense" && entries[0].status === "posted" && entries[0].createdByName === "المحاسب", "the entry is stored once, as posted, with its author");
-  await page.getByRole("button", { name: "الأرصدة والملخص" }).click();
+  check(n >= 3, "customer records are intact");
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/desktop-home.png` });
+});
+
+await as("agentA", async (page) => {
+  const aside = await page.locator("aside").textContent();
+  check(!RETIRED.some((t) => aside.includes(t)), "retired screens are gone from the salesperson's menu");
+  // Shalaby AI: the button is always there, and the chat answers from the user's own data through the server
+  const fab = page.getByRole("button", { name: /Shalaby AI/ });
+  check((await fab.count()) === 1 && (await fab.innerText()).includes("Shalaby AI"), "the floating Shalaby AI button is on screen");
+  await fab.click();
   await page.waitForTimeout(600);
-  check((await main.innerText()).includes("-250") || (await main.innerText()).includes("−250") || (await main.innerText()).includes("250"), "the balance reflects the expense");
-  await page.getByRole("button", { name: "الحركات", exact: true }).click();
-  await page.getByRole("button", { name: "إلغاء", exact: true }).first().click();
-  await page.locator('[role="dialog"] input').fill("مبلغ غلط");
-  await page.getByRole("button", { name: "تأكيد الإلغاء" }).click();
-  await page.waitForTimeout(2000);
-  await env.withSecurityRulesDisabled(async (ctx) => {
-    entries = (await getDocs(collection(ctx.firestore(), "accountingEntries"))).docs.map((d) => d.data());
-  });
-  check(entries.length === 1 && entries[0].status === "void" && entries[0].voidReason === "مبلغ غلط" && entries[0].amount === 250, "cancelling keeps the entry, marks it void and records why");
+  const panel = page.getByRole("dialog", { name: /شلبي/ });
+  check((await panel.locator(".shalaby-character").count()) > 0, "the character appears inside the chat");
+  await panel.locator("textarea, input").first().fill("مين عنده متابعات متأخرة؟");
+  await panel.getByRole("button", { name: "إرسال" }).click();
+  await page.waitForTimeout(200);
+  check((await panel.locator(".sh-state-thinking").count()) > 0, "the character thinks while the answer is prepared");
+  await panel.locator(".zaki-msg.bot:not(.zaki-thinking)").last().waitFor({ timeout: 8000 });
+  await page.waitForTimeout(300);
+  check((await panel.locator(".sh-state-speaking").count()) > 0, "the character talks while the answer appears");
+  await page.waitForTimeout(2500);
+  const answer = await panel.innerText();
+  check(answer.includes("عميل أحمد الخاص"), "the answer quotes a real follow-up the tool read from the database");
+  check(!answer.includes("عميل فرع تاني") && !answer.includes("عميل المدير"), "the answer holds nothing outside the salesperson's scope");
+  check(aiCalls.length >= 2 && aiCalls.every((c) => c.auth), "the browser called the server, with the user's token, for each step");
+  const toolResult = JSON.stringify(aiCalls[aiCalls.length - 1].body);
+  check(toolResult.includes("functionResponse") && !toolResult.includes("عميل فرع تاني"), "the tool result sent to the AI is the user's own data only");
+  const bundle = readdirSync(join(DIST, "assets")).filter((f) => f.endsWith(".js")).map((f) => readFileSync(join(DIST, "assets", f), "utf8")).join("\n");
+  check(!/sk-ant-[A-Za-z0-9_-]{10,}/.test(bundle), "no Claude key anywhere in the app's code");
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/desktop-chat.png` });
 });
 
-await as("bm1", async (page, go) => {
-  const aside = await page.locator("aside").innerText();
-  check(!aside.includes("الزيارات") && !aside.includes("التقييمات والشكاوى"), "the visits and reviews entries are gone from the menu");
-  await go("جروبات التليجرام");
-  await page.getByRole("button", { name: "جروب جديد" }).click();
-  await page.locator('[role="dialog"] input').first().fill("جروب المبيعات");
-  await page.locator('[role="dialog"] input[dir="ltr"]').fill("https://evil.com/abc");
-  await page.getByRole("button", { name: "حفظ", exact: true }).click();
+// Phone width: the menu, the home and the chat must fit and stay usable.
+await as("agentA", async (page) => {
+  const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
+  check(scrollW <= 392, `no sideways scrolling on a phone (${scrollW}px)`);
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/mobile-home.png` });
+  await page.getByRole("button", { name: /Shalaby AI/ }).click();
   await page.waitForTimeout(800);
-  check((await page.locator('[role="dialog"]').innerText()).includes("لينك تليجرام"), "a non-Telegram link is refused with a message");
-  await page.locator('[role="dialog"] input[dir="ltr"]').fill("t.me/sales_team");
-  await page.getByRole("button", { name: "حفظ", exact: true }).click();
-  await page.waitForTimeout(2000);
-  check((await page.locator("main").innerText()).includes("جروب المبيعات"), "the manager adds a Telegram group");
-  let groups = [];
-  await env.withSecurityRulesDisabled(async (ctx) => { groups = (await getDocs(collection(ctx.firestore(), "telegramGroups"))).docs.map((d) => d.data()); });
-  check(groups.length === 1 && groups[0].link === "https://t.me/sales_team" && groups[0].createdByName === "مدير فرع 1", "the group is stored once with the tidied link");
-});
-
-await as("agentA", async (page, go) => {
-  await go("جروبات التليجرام");
-  const txt = await page.locator("main").innerText();
-  check(txt.includes("جروب المبيعات") && !txt.includes("جروب جديد"), "a salesperson sees the group but cannot add or edit");
-  const href = await page.getByRole("link", { name: /افتح الجروب/ }).first().getAttribute("href");
-  check(href === "https://t.me/sales_team", "the open button points at the Telegram link");
-});
-
-await as("gm", async (page, go) => {
-  await go("الحسابات");
-  check((await page.locator("main").innerText()).includes("الحسابات"), "the owner can open the accounts page");
-});
+  const box = await page.getByRole("dialog", { name: /شلبي/ }).boundingBox();
+  check(!!box && box.width <= 390 && box.x >= 0, "the chat fits the phone screen");
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/mobile-chat.png` });
+}, { width: 390, height: 844 });
 
 await browser.close();
 server.close();

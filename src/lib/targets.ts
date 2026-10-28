@@ -196,3 +196,12 @@ export function withAmount(
     history: existing.amount === amount ? existing.history : [...(existing.history ?? []), { at: now, byId: by.id, byName: by.name, from: existing.amount, to: amount }].slice(-20),
   };
 }
+
+/** The months before `month`, oldest first: how an employee's achievement moved over time. */
+export function monthHistory(userId: string, month: string, count: number, targets: EmployeeTarget[], bookings: Booking[], today: string, settings: TargetSettings) {
+  return Array.from({ length: count }, (_, i) => shiftMonth(month, -(count - i))).map((m) => {
+    const row = targets.find((t) => t.userId === userId && t.month === m);
+    const p = evaluate(row ? row.amount : settings.defaultAmount, achievedFor(userId, m, bookings, settings).amount, m, today, settings);
+    return { month: m, ...p };
+  });
+}

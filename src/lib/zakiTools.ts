@@ -1,6 +1,6 @@
 import type { AccountEntry, AccountingSettings, Booking, Branch, BrokerEntity, Department, EmployeeTarget, FollowUp, Lead, NotBoughtRecord, ReviewNote, ReviewRequest, TargetSettings, User, Visit } from "../types/crm";
 import { balances, filterEntries, summarize } from "./accounting";
-import { overview as targetsOverview, monthOf as targetMonth, isMonth, targetStateNames } from "./targets";
+import { overview as targetsOverview, monthOf as targetMonth, isMonth, targetStateNames, shiftMonth, achievedFor, evaluate, targetId } from "./targets";
 import { bucketOf, priorityNames, priorityOf } from "./followUps";
 import { addToDate } from "./postSale";
 import { bookingSplit, departmentIds } from "./purchases";
@@ -436,6 +436,85 @@ export function runTool(name: string, a: Args, d: ToolData): unknown {
         overall: o.total,
         purchasesBySomeoneNotListedEGP: o.otherAchieved,
         ...page(rows, limitOf(a)),
+      };
+    }
+
+    case "employee_performance": {
+      if (!d.targetSettings) return { error: "الأهداف مش متاحة." };
+      const pool = d.targetUsers ?? d.users;
+      const matches = pool.filter((u) => has(u.name, a.agent));
+      if (!matches.length) return { error: "مفيش موظف بالاسم ده داخل نطاقك." };
+      if (matches.length > 1 && !matches.some((u) => norm(u.name) === norm(String(a.agent))))
+        return { ambiguous: true, candidates: matches.slice(0, 8).map((u) => ({ name: u.name, branch: u.branchId ? branchName(u.branchId) : null })) };
+      const u = matches.find((x) => norm(x.name) === norm(String(a.agent))) ?? matches[0];
+      const months = Math.min(6, Math.max(1, Math.floor(num(a.months, 3))));
+      const cur = targetMonth(d.today);
+      const monthRow = (m: string) => {
+        const row = (d.employeeTargets ?? []).find((t) => t.id === targetId(u.id, m));
+        const ach = achievedFor(u.id, m, d.bookings, d.targetSettings!);
+        const p = evaluate(row ? row.amount : d.targetSettings!.defaultAmount, ach.amount, m, d.today, d.targetSettings!);
+        return { month: m, targetEGP: p.target, achievedEGP: p.achieved, percent: p.percent, expectedPercentByToday: p.expectedPercent, remainingEGP: p.remaining, state: targetStateNames[p.state], purchases: ach.purchases };
+      };
+      const mine = d.followUps.filter((f) => f.assignedAgentId === u.id);
+      const openF = mine.filter((f) => !["completed", "cancelled"].includes(f.status));
+      const overdue = openF.filter((f) => bucketOf(f, d.today) === "overdue");
+      const since = addToDate(d.today, { days: -30 });
+      const done30 = mine.filter((f) => f.status === "completed" && inRange(f.completedAt, since, d.today));
+      const onTime = done30.filter((f) => (f.completedAt ?? "").slice(0, 10) <= f.scheduledAt.slice(0, 10)).length;
+      const nb = d.notBoughtRecords.filter((r) => r.agentId === u.id && inRange(r.createdAt, since, d.today));
+      const reasonCount = new Map<string, number>();
+      for (const r of nb) for (const id of r.reasons) reasonCount.set(id, (reasonCount.get(id) ?? 0) + 1);
+      return {
+        employee: u.name,
+        thisMonth: monthRow(cur),
+        previousMonths: Array.from({ length: months }, (_, i) => monthRow(shiftMonth(cur, -(i + 1)))),
+        followUps: {
+          open: openF.length,
+          overdue: overdue.length,
+          oldestOverdueDays: overdue.length ? Math.max(...overdue.map((f) => Math.round((Date.parse(d.today) - Date.parse(f.scheduledAt.slice(0, 10))) / 86_400_000))) : 0,
+          dueToday: openF.filter((f) => bucketOf(f, d.today) === "today").length,
+          completedLast30Days: done30.length,
+          completedOnTimeLast30Days: onTime,
+          movedTimes: openF.reduce((s, f) => s + (f.rescheduleCount ?? 0), 0),
+          highPriorityOpen: openF.filter((f) => priorityOf(f) === "high").length,
+        },
+        customers: d.leads.filter((l) => l.assignedAgentId === u.id).length,
+        notBoughtLast30Days: { total: nb.length, topReasons: [...reasonCount.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([id, n]) => ({ reason: reasonLabel(id as Parameters<typeof reasonLabel>[0]), count: n })) },
+        note: "الأرقام من المبيعات والمتابعات المسجّلة فعلًا. أي تفسير للأسباب لازم يتقال كاحتمال.",
+      };
+    }
+
+    case "attention_needed": {
+      const aids = agentIdsFor(a.agent);
+      const openF = d.followUps
+        .filter((f) => !["completed", "cancelled"].includes(f.status))
+        .filter((f) => !aids || aids.includes(f.assignedAgentId));
+      const lateRows = openF
+        .filter((f) => bucketOf(f, d.today) !== "upcoming")
+        .map((f) => ({
+          customer: f.leadName,
+          responsible: userName(f.assignedAgentId) ?? f.assignedAgentName ?? null,
+          due: f.scheduledAt.replace("T", " "),
+          daysLate: Math.max(0, Math.round((Date.parse(d.today) - Date.parse(f.scheduledAt.slice(0, 10))) / 86_400_000)),
+          priority: priorityNames[priorityOf(f)],
+          movedTimes: f.rescheduleCount ?? 0,
+          reason: f.reason.slice(0, 120),
+        }))
+        .sort((x, y) => y.daysLate - x.daysLate || (x.priority === priorityNames.high ? -1 : 0) - (y.priority === priorityNames.high ? -1 : 0));
+      const withOpen = new Set(openF.map((f) => f.leadId));
+      const stale = (date?: string) => !!date && Math.round((Date.parse(d.today) - Date.parse(date.slice(0, 10))) / 86_400_000) >= 14;
+      const forgotten = d.leads
+        .filter((l) => !aids || (l.assignedAgentId && aids.includes(l.assignedAgentId)))
+        .filter((l) => !withOpen.has(l.id) && ["new", "uncontacted", "contacted", "interested", "prospect", "needs_followup"].includes(l.status))
+        .filter((l) => stale(l.lastContactDate ?? l.createdAt))
+        .map((l) => ({ customer: l.name, status: statusNames[l.status], responsible: userName(l.assignedAgentId) ?? null, lastContact: (l.lastContactDate ?? l.createdAt).slice(0, 10) }))
+        .sort((x, y) => x.lastContact.localeCompare(y.lastContact));
+      return {
+        today: d.today,
+        overdueCount: lateRows.filter((r) => r.daysLate > 0).length,
+        dueTodayCount: lateRows.filter((r) => r.daysLate === 0).length,
+        followUps: page(lateRows, limitOf(a)),
+        customersWithoutFollowUp: page(forgotten, limitOf(a)),
       };
     }
 

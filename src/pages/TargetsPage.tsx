@@ -2,10 +2,8 @@ import { Fragment, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Target, Settings2, Check, X } from "lucide-react";
 import { useCRM } from "../context/CRMContext";
 import { hasPermission, isSalesCapable } from "../lib/permissions";
-import { departmentNames, formatMoney, today } from "../lib/presentation";
-import { departmentIds } from "../lib/purchases";
-import { achievedFor, evaluate, monthOf, overview, shiftMonth, targetId, targetStateNames, type Performance, type TargetState } from "../lib/targets";
-import type { Department } from "../types/crm";
+import { formatMoney, today } from "../lib/presentation";
+import { achievedFor, evaluate, monthHistory, monthOf, overview, shiftMonth, targetId, targetStateNames, type Performance, type TargetState } from "../lib/targets";
 
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("ar-EG", { month: "long", year: "numeric", timeZone: "UTC" });
 const stateColor: Record<TargetState, string> = {
@@ -42,6 +40,7 @@ export function TargetsPage() {
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const [open, setOpen] = useState("");
   const [showRules, setShowRules] = useState(false);
+  const [only, setOnly] = useState<"all" | "behind" | "achieved">("all");
 
   const data = useMemo(() => overview(users, employeeTargets, bookings, month, now, targetSettings), [users, employeeTargets, bookings, month, now, targetSettings]);
   const branchName = (id?: string) => branches.find((b) => b.id === id)?.name ?? "";
@@ -138,7 +137,7 @@ export function TargetsPage() {
         <div>
           <span className="eyebrow">الهدف الشهري والإنجاز الفعلي</span>
           <h1>الأهداف</h1>
-          <p>{canView ? "حدد هدف كل موظف وتابع إنجازه من المشتريات المسجّلة فعلًا." : "هدفك الشهري وإنجازك لحد دلوقتي."}</p>
+          <p>{canView ? "حدد هدف كل موظف وتابع إنجازه من المبيعات المسجّلة فعلًا." : "هدفك الشهري وإنجازك لحد دلوقتي."}</p>
         </div>
         <div className="tab-filter" role="group" aria-label="الشهر">
           <button aria-label="الشهر السابق" onClick={() => setMonth(shiftMonth(month, -1))}>
@@ -156,7 +155,7 @@ export function TargetsPage() {
         </p>
       )}
 
-      {sells && card(mine.p, mine.a.amount, "هدفي", mine.p.target ? `${monthLabel(month)} · ${mine.a.purchases} عملية شراء` : `${monthLabel(month)} · لسه ما اتحددلكش هدف للشهر ده`)}
+      {sells && card(mine.p, mine.a.amount, "هدفي", mine.p.target ? `${monthLabel(month)} · ${mine.a.purchases} عملية بيع` : `${monthLabel(month)} · لسه ما اتحددلكش هدف للشهر ده`)}
       {sells && !canView && (
         <section className="panel" style={{ marginTop: 20 }}>
           <div className="panel-header">
@@ -229,7 +228,7 @@ export function TargetsPage() {
             </div>
             {data.otherAchieved > 0 && (
               <p className="quiet-note" style={{ margin: "0 20px 12px" }}>
-                فيه كمان مشتريات بقيمة {formatMoney(data.otherAchieved)} ج.م في الشهر ده باسم ناس مش في القايمة دي (موظف اتشال أو مش من فريق المبيعات)، وماتحسبتش في الإجماليات فوق.
+                فيه كمان مبيعات بقيمة {formatMoney(data.otherAchieved)} ج.م في الشهر ده باسم ناس مش في القايمة دي (موظف اتشال أو مش من فريق المبيعات)، وماتحسبتش في الإجماليات فوق.
               </p>
             )}
 
@@ -254,25 +253,23 @@ export function TargetsPage() {
                   <input type="checkbox" checked={targetSettings.paceAware} onChange={(e) => updateTargetSettings({ paceAware: e.target.checked })} />
                   قارن بالمفروض لحد النهارده (حسب أيام الشهر اللي عدّت) بدل الهدف الكامل
                 </label>
-                <div className="field">
-                  <span>الأقسام اللي بتتحسب في الإنجاز (من غير اختيار = كلها)</span>
-                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                    {departmentIds.map((d) => (
-                      <label className="checkbox-line" key={d}>
-                        <input
-                          type="checkbox"
-                          checked={targetSettings.departments.includes(d)}
-                          onChange={(e) => updateTargetSettings({ departments: e.target.checked ? [...targetSettings.departments, d as Department] : targetSettings.departments.filter((x) => x !== d) })}
-                        />
-                        {departmentNames[d]}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <p className="quiet-note">الإنجاز = قيمة المشتريات المسجّلة للموظف في الشهر (من غير الملغي والمسترجع). كل عملية بتتحسب مرة واحدة لموظف واحد.</p>
+                <p className="quiet-note">الإنجاز = قيمة المبيعات المسجّلة للموظف في الشهر (من غير الملغي والمسترجع). كل عملية بتتحسب مرة واحدة لموظف واحد.</p>
               </div>
             )}
 
+            <div className="tab-filter" role="group" aria-label="عرض" style={{ margin: "0 16px 10px" }}>
+              {(
+                [
+                  ["all", "الكل"],
+                  ["behind", `متأخرين (${data.rows.filter((r) => r.state === "behind" || r.state === "missed").length})`],
+                  ["achieved", `حققوا الهدف (${data.rows.filter((r) => r.state === "achieved").length})`],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} aria-pressed={only === id} onClick={() => setOnly(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="table-scroll">
               <table className="data-table">
                 <thead>
@@ -283,10 +280,11 @@ export function TargetsPage() {
                     <th>النسبة</th>
                     <th>المتبقي</th>
                     <th>الحالة</th>
+                    <th title="نسبة الإنجاز في الـ 3 شهور اللي فاتت، الأقدم الأول">آخر 3 شهور</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.rows.map((r) => {
+                  {data.rows.filter((r) => only === "all" || (only === "behind" ? r.state === "behind" || r.state === "missed" : r.state === "achieved")).map((r) => {
                     const a = achievedFor(r.user.id, month, bookings, targetSettings);
                     const stored = employeeTargets.find((t) => t.id === targetId(r.user.id, month));
                     const draft = drafts[r.user.id];
@@ -340,14 +338,18 @@ export function TargetsPage() {
                           <td>
                             <span className={`status-pill ${stateClass[r.state]}`}>{targetStateNames[r.state]}</span>
                           </td>
+                          <td className="table-secondary" style={{ whiteSpace: "nowrap" }}>
+                            {monthHistory(r.user.id, month, 3, employeeTargets, bookings, now, targetSettings)
+                              .map((h) => (h.target ? pct(h.percent) : "—"))
+                              .join(" · ")}
+                          </td>
                         </tr>
                         {open === r.user.id && (
                           <tr>
-                            <td colSpan={6} style={{ background: "var(--surface-soft)" }}>
+                            <td colSpan={7} style={{ background: "var(--surface-soft)" }}>
                               <div style={{ padding: 8 }}>
                                 <p className="table-secondary">
-                                  {r.purchases} عملية شراء ·{" "}
-                                  {departmentIds.filter((d) => a.byDepartment[d] > 0).map((d) => `${departmentNames[d]}: ${formatMoney(a.byDepartment[d])}`).join(" · ") || "مفيش مشتريات في الشهر ده"}
+                                  {r.purchases ? `${r.purchases} عملية بيع · ${formatMoney(a.amount)} ج.م` : "مفيش مبيعات في الشهر ده"}
                                 </p>
                                 {stored && (
                                   <p className="table-secondary">

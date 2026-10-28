@@ -5,17 +5,19 @@ import { aiStatus, runZaki, type ChatTurn } from "../../lib/aiClient";
 import { runTool, toolLabels, type ToolData } from "../../lib/zakiTools";
 import { zakiGuide, zakiToolsFor } from "../../lib/zakiGuide";
 import { hasPermission, isSalesCapable } from "../../lib/permissions";
+import { canAccessPage } from "../../lib/access";
 import { today } from "../../lib/presentation";
 import { VoiceNoteField } from "../common/VoiceNoteField";
 import { ZakiAvatar, type ZakiMood } from "./ZakiAvatar";
+import { onOpenShalaby } from "./shalabyEvents";
 
 const examples = [
-  "مين أقوى عملاء البستان؟",
-  "مين العملاء اللي لازم أتابعهم النهارده؟",
-  "أكتر سبب بيخلي العملاء ما يشتروش؟",
-  "أضعف فرع مين وليه؟",
-  "مين أنشط وسيط الشهر ده؟",
-  "ملخص الأسبوع",
+  "مين الموظفين اللي متأخرين عن التارجت؟",
+  "مين عنده متابعات متأخرة النهارده؟",
+  "إيه أهم المتابعات اللي محتاجة تدخل النهارده؟",
+  "مين أقرب موظف لتحقيق التارجت؟",
+  "لخصلي حالة العملاء اللي محتاجين متابعة.",
+  "What should I focus on today?",
 ];
 
 const thinkingLines = ["بدوّر في الملفات…", "بحسبها لحظة…", "بجمّع الأرقام…", "قربت أخلّص…"];
@@ -120,7 +122,8 @@ function Rich({ text }: { text: string }) {
 export function ZakiChat() {
   const { currentUser, effectiveUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes, employeeTargets, targetSettings, accountEntries, accountingSettings, targetUsers } = useCRM();
   const canTargets = hasPermission(effectiveUser, "targets.view") || isSalesCapable(effectiveUser);
-  const canAccounts = hasPermission(effectiveUser, "accounts.view");
+  // The accounts screen was taken out of the simplified CRM, so its tool is not offered either.
+  const canAccounts = hasPermission(effectiveUser, "accounts.view") && canAccessPage(effectiveUser, "accounts");
   // Always the latest data: the ref is refreshed on every render, and Firestore keeps the state live.
   const dataRef = useRef<ToolData | null>(null);
   dataRef.current = {
@@ -129,7 +132,10 @@ export function ZakiChat() {
     ...(canAccounts ? { accounting: { entries: accountEntries, settings: accountingSettings } } : {}),
   };
   const [steps, setSteps] = useState<string[]>([]);
-  const [available, setAvailable] = useState(false);
+  // "off" = the server has no Claude key yet: the assistant still opens and says exactly what is missing.
+  const [available, setAvailable] = useState<"checking" | "on" | "off">("checking");
+  const [speaking, setSpeaking] = useState(false);
+  const sendRef = useRef<(q: string) => void>(() => {});
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -145,11 +151,11 @@ export function ZakiChat() {
   const first = currentUser.name.split(" ").find((w) => !titles.has(w.toLowerCase())) ?? currentUser.name;
 
   useEffect(() => {
-    aiStatus().then((s) => setAvailable(s === "server"));
+    aiStatus().then((s) => setAvailable(s === "server" ? "on" : "off"));
   }, []);
   // A quick hello after the page settles, once per session.
   useEffect(() => {
-    if (!available) return;
+    if (available !== "on") return;
     let seen = false;
     try {
       seen = sessionStorage.getItem("zaki-greeted") === "1";
@@ -194,15 +200,31 @@ export function ZakiChat() {
     const id = window.setTimeout(() => setMood("sleepy"), 90000);
     return () => window.clearTimeout(id);
   }, [open, busy, greet]);
+  // Other screens can open the chat, optionally with a question ready.
+  useEffect(
+    () =>
+      onOpenShalaby((question) => {
+        setGreet(false);
+        setOpen(true);
+        if (question) window.setTimeout(() => sendRef.current(question), 50);
+      }),
+    [],
+  );
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turns, busy, open]);
 
-  if (!available) return null;
+  const openChat = () => {
+    setGreet(false);
+    setOpen(true);
+    // the welcome wave, then back to listening
+    setMood("wave");
+    window.setTimeout(() => setMood((m) => (m === "wave" ? "idle" : m)), 2600);
+  };
 
   const send = async (text: string) => {
     const q = text.trim();
-    if (!q || busy) return;
+    if (!q || busy || available !== "on") return;
     setInput("");
     const history = turns;
     setTurns((t) => [...t, { role: "user", text: q }]);
@@ -224,8 +246,14 @@ export function ZakiChat() {
         setFreshIdx(t.length + 1);
         return [...t, { role: "assistant", text: answer, used: [...new Set(used.map((u) => toolLabels[u] ?? u))] }];
       });
-      setMood("happy");
-      window.setTimeout(() => setMood("idle"), 3200);
+      setSpeaking(true);
+      setMood("talking");
+      // roughly how long the answer takes to appear on screen
+      window.setTimeout(() => {
+        setSpeaking(false);
+        setMood("happy");
+        window.setTimeout(() => setMood((m) => (m === "happy" ? "idle" : m)), 2200);
+      }, Math.min(9000, 600 + answer.split(/\s+/).length * 16));
     } catch (e) {
       setMood("sorry");
       window.setTimeout(() => setMood("idle"), 4000);
@@ -239,6 +267,7 @@ export function ZakiChat() {
     }
   };
 
+  sendRef.current = send;
   return (
     <>
       {!open && (
@@ -250,40 +279,57 @@ export function ZakiChat() {
           )}
           <button
             className={`zaki-fab ${mood === "sleepy" ? "is-sleepy" : ""}`}
-            onClick={() => {
-              setGreet(false);
-              setMood("happy");
-              setOpen(true);
-              window.setTimeout(() => setMood("idle"), 1800);
-            }}
-            aria-label="افتح شلبي، المساعد الذكي"
+            onClick={openChat}
+            aria-label="افتح Shalaby AI، المساعد الذكي"
           >
             <ZakiAvatar mood={mood} size={96} />
-            <span className="zaki-fab-label">شلبي</span>
+            <span className="zaki-fab-label is-ai">Shalaby AI</span>
           </button>
         </div>
       )}
       {open && (
         <div className="zaki-panel" role="dialog" aria-label="شلبي، المساعد الذكي">
           <div className="zaki-head">
-            <ZakiAvatar mood={busy ? (slow ? "watch" : "thinking") : mood} size={168} className="zaki-head-art" />
+            <ZakiAvatar mood={busy ? "thinking" : speaking ? "talking" : mood} size={150} className="zaki-head-art" />
             <div>
-              <strong>شلبي</strong>
-              <small><i className="zaki-online" />متاح · بيجاوب من بيانات نظامك</small>
+              <strong>Shalaby AI · شلبي</strong>
+              <small>
+                <i className="zaki-online" style={available === "on" ? undefined : { background: "var(--wait)" }} />
+                {available === "on" ? (busy ? "بيفكّر…" : speaking ? "بيرد…" : "متاح · بيجاوب من بيانات نظامك") : available === "checking" ? "بيتأكد من الاتصال…" : "محتاج إعداد على السيرفر"}
+              </small>
             </div>
             <button className="icon-button" onClick={() => setOpen(false)} aria-label="إغلاق">
               <X size={18} />
             </button>
           </div>
           <div className="zaki-body">
-            {turns.length === 0 && !busy && (
-              <div className="zaki-demo" aria-hidden="true">
-                                <small>جرّب تسألني، مثلًا:</small>
-                <div className="zaki-demo-line">
-                  <span>{typed}</span>
-                  <i className="zaki-caret" />
-                </div>
+            {available === "off" && (
+              <div className="zaki-setup" role="status">
+                <p>
+                  <strong>أهلًا! أنا شلبي.</strong> لسه مش متوصّل بالذكاء الاصطناعي على السيرفر، فمش هقدر أجاوب دلوقتي.
+                </p>
+                <p className="table-secondary">
+                  المطلوب مرة واحدة: إضافة مفتاح Claude (<code>claude_key</code>) في ملف <code>crm-ai-secrets.php</code> خارج <code>public_html</code> على السيرفر. التفاصيل في <code>docs/ai-setup.md</code>.
+                </p>
               </div>
+            )}
+            {available === "on" && turns.length === 0 && !busy && (
+              <>
+                <div className="zaki-demo" aria-hidden="true">
+                  <small>اسألني بالمصري أو بالإنجليزي، مثلًا:</small>
+                  <div className="zaki-demo-line">
+                    <span>{typed}</span>
+                    <i className="zaki-caret" />
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 12px 12px" }}>
+                  {examples.slice(0, 4).map((q) => (
+                    <button key={q} className="btn-secondary" style={{ fontSize: 12, minHeight: 32, padding: "4px 10px" }} onClick={() => send(q)}>
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
             {turns.map((t, i) => (
               <div key={i} className={`zaki-msg ${t.role === "user" ? "me" : "bot"}`}>
@@ -314,7 +360,7 @@ export function ZakiChat() {
               placeholder="اكتب سؤالك أو اضغط تكلّم…"
               onSubmit={() => send(input)}
             />
-            <button className="btn-primary zaki-send" onClick={() => send(input)} disabled={busy || !input.trim()} aria-label="إرسال">
+            <button className="btn-primary zaki-send" onClick={() => send(input)} disabled={busy || !input.trim() || available !== "on"} aria-label="إرسال">
               <Send size={16} />
             </button>
           </div>

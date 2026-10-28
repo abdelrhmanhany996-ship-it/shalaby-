@@ -49,7 +49,7 @@ import {
 import { useDialog } from "./useDialog";
 import { requestsTo } from "../../lib/reviews";
 import { CustomerRatingModal } from "./CustomerRatingModal";
-import { InterestPicker, interestNames } from "./InterestPicker";
+import { interestNames } from "./InterestPicker";
 import { NameWithTitle } from "./NameWithTitle";
 import { ReviewCard } from "../reviews/ReviewCard";
 import { VoiceNoteField } from "./VoiceNoteField";
@@ -314,7 +314,7 @@ export function LeadDetailsModal({
         !parts.length ||
         parts.some(([, v]) => !Number.isFinite(v) || v < 0)
       ) {
-        setFeedback("اكتب قيمة أكبر من صفر في قسم واحد على الأقل.");
+        setFeedback("اكتب قيمة البيع (أكبر من صفر).");
         return;
       }
       const total = parts.reduce((s, [, v]) => s + v, 0);
@@ -327,7 +327,8 @@ export function LeadDetailsModal({
         agentId: agent,
         department: primary,
         courseId: parts.length === 1 ? `ps-${primary}` : "ps-multi",
-        courseName: parts.map(([id]) => departmentNames[id]).join(" + "),
+        // A sale is one amount now; older records may still carry a split, which is kept as it was.
+        courseName: parts.length === 1 && primary === "general" ? "عملية بيع" : parts.map(([id]) => departmentNames[id]).join(" + "),
         bookingDate: today(),
         amount: total,
         departmentAmounts: Object.fromEntries(parts),
@@ -438,13 +439,7 @@ export function LeadDetailsModal({
               واتساب
             </a>
           )}
-          {canRequestReview(effectiveUser, lead) && (
-            <button className="btn-secondary" onClick={() => setRating(true)}>
-              <Star size={15} />
-              {sentBefore ? "طلب تقييم جديد؟" : "طلب تقييم"}
-            </button>
-          )}
-          {(["edit", "note", "visit", "booking", "reassign"].some((v) =>
+          {(["edit", "note", "booking", "reassign"].some((v) =>
             allowed(v as Action),
           ) ||
             canContactCustomer(effectiveUser, lead, followUps)) && (
@@ -462,9 +457,8 @@ export function LeadDetailsModal({
             <div className="client-more" id="client-more-actions">
               {[
                 { id: "edit", label: "تعديل البيانات", Icon: Pencil },
-                { id: "visit", label: "تسجيل زيارة", Icon: MapPin },
                 { id: "note", label: "إضافة ملاحظة", Icon: FileText },
-                { id: "booking", label: "تسجيل شراء", Icon: ShoppingBag },
+                { id: "booking", label: "تسجيل بيع", Icon: ShoppingBag },
                 ...(canAssignCustomers(effectiveUser)
                   ? [{ id: "reassign", label: "تغيير المسؤول", Icon: Users }]
                   : []),
@@ -615,9 +609,6 @@ export function LeadDetailsModal({
                     </label>
                   </>
                 )}
-                {action === "edit" && (
-                  <InterestPicker value={interests} onChange={setInterests} />
-                )}
                 {(action === "followup" || action === "visit") && (
                   <>
                     <label className="field">
@@ -671,37 +662,21 @@ export function LeadDetailsModal({
                 )}
                 {action === "booking" && (
                   <>
-                    {departmentIds.map((id) => (
-                      <label className="field" key={id}>
-                        <span>{departmentNames[id]} (ج.م)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step=".01"
-                          placeholder="0"
-                          value={deptAmounts[id]}
-                          onChange={(e) =>
-                            setDeptAmounts((prev) => ({
-                              ...prev,
-                              [id]: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    ))}
-                    <p className="table-secondary full-width">
-                      إجمالي المشتريات:{" "}
-                      <strong>
-                        {formatMoney(
-                          departmentIds.reduce(
-                            (s, id) => s + (Number(deptAmounts[id]) || 0),
-                            0,
-                          ),
-                        )}{" "}
-                        ج.م
-                      </strong>{" "}
-                      — اكتب المبلغ في القسم أو الأقسام اللي اشترى منها فقط، وسيب الباقي فاضي.
-                    </p>
+                    <label className="field">
+                      <span>
+                        قيمة البيع (ج.م) <em>مطلوب</em>
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step=".01"
+                        inputMode="decimal"
+                        dir="ltr"
+                        placeholder="0"
+                        value={deptAmounts.general}
+                        onChange={(e) => setDeptAmounts((prev) => ({ ...prev, general: e.target.value }))}
+                      />
+                    </label>
                   </>
                 )}
                 {["reassign", "followup", "booking", "visit"].includes(
@@ -836,10 +811,11 @@ export function LeadDetailsModal({
             }}
           >
             {Object.entries(labels)
+              // Visits and reviews were taken out of the simplified CRM; their records stay in the customer's history.
+              .filter(([id]) => id !== "visits" && id !== "reviews")
               .filter(
                 ([id]) =>
                   id === "timeline" ||
-                  id === "reviews" ||
                   hasPermission(
                     effectiveUser,
                     (

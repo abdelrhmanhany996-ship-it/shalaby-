@@ -402,9 +402,6 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
           المتابعات
           {overdueList.length > 0 && <span className="tab-alert">{overdueList.length} متأخرة</span>}
         </button>
-        <button aria-pressed={view === "reminders"} onClick={() => setView("reminders")}>
-          تذكيرات <span style={{ opacity: 0.65, marginInlineStart: 5 }}>{tasks.length}</span>
-        </button>
         <button aria-pressed={view === "plan"} onClick={() => setView("plan")}>
           خطة شلبي اليوم
         </button>

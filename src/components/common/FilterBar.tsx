@@ -29,7 +29,8 @@ interface Props {
 
 /** One filter toolbar for every list in the system: search, a few quick selects, extra filters, count and reset. */
 export function FilterBar({ search, selects = [], dates, count, actions, onReset }: Props) {
-  const visibleSelects = selects.filter((s) => s.options.length > 0);
+  // Branches are no longer part of the simplified CRM, so no list offers a branch filter.
+  const visibleSelects = selects.filter((s) => s.options.length > 0 && s.id !== "branch");
   const primary = visibleSelects.filter((s) => s.primary);
   const more = visibleSelects.filter((s) => !s.primary);
   const active = useMemo(

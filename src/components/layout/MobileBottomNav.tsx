@@ -1,6 +1,6 @@
 import { useCRM } from "../../context/CRMContext";
-import { canAccessPage, isSales, worksOwnCustomers } from "../../lib/access";
-import { LayoutDashboard, Users, PhoneCall, Plus, Menu } from "lucide-react";
+import { canAccessPage, worksOwnCustomers } from "../../lib/access";
+import { LayoutDashboard, Users, PhoneCall, Plus, Menu, Target } from "lucide-react";
 interface Props {
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -17,7 +17,7 @@ export function MobileBottomNav({
     { id: "clients", label: "العملاء", Icon: Users },
     canAccessPage(effectiveUser, "add_client")
       ? { id: "add_client", label: "إضافة عميل", Icon: Plus }
-      : { id: "reports", label: "التقارير", Icon: LayoutDashboard },
+      : { id: "targets", label: "الأهداف", Icon: Target },
     {
       id: "followups",
       label: worksOwnCustomers(effectiveUser) ? "متابعاتي" : "المتابعات",

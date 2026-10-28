@@ -226,7 +226,8 @@ test("supervisors are limited to assigned branches and specialization", () => {
   assert.deepEqual(accounts.leads, []);
   assert.deepEqual(accounts.followUps, []);
   assert.deepEqual(accounts.visits, []);
-  assert.equal(canAccessPage(accounts.effectiveUser, "invoices"), true);
+  // the invoices screen is retired in the simplified CRM; the permission itself is unchanged
+  assert.equal(canAccessPage(accounts.effectiveUser, "invoices"), false);
   assert.equal(canAccessPage(accounts.effectiveUser, "clients"), false);
   assert.ok(
     accounts.invoiceCustomers.every((l) => l.branchId === employee.branchId),
@@ -582,7 +583,7 @@ test("accounting: only the owner/developer and accounts specialists see or chang
   accountant.view.correctAccountEntry("e1", {} as never, "غلط");
   accountant.view.updateAccountingSettings({ accounts: [], categories: [] });
   assert.deepEqual(accountant.calls, ["addAccountEntry", "voidAccountEntry", "correctAccountEntry", "updateAccountingSettings"]);
-  assert.equal(canAccessPage(accountant.view.effectiveUser, "accounts"), true);
+  assert.equal(canAccessPage(accountant.view.effectiveUser, "accounts"), false); // screen retired, data and rules kept
 
   const owner = mk(director);
   assert.equal(owner.view.accountEntries.length, 1);
@@ -607,7 +608,7 @@ test("telegram groups: managers change the directory, salespeople only read it, 
     return { ...fixture(actor, { telegramGroups: [], ...s.fns }), calls: s.calls };
   };
   for (const actor of [employee, manager, director, makeUser("supervisor", { id: "sup1", specialty: "accounts", branchId: employee.branchId })]) {
-    assert.equal(canAccessPage(mk(actor).view.effectiveUser, "telegram"), true, `${actor.role} reaches the page`);
+    assert.equal(canAccessPage(mk(actor).view.effectiveUser, "telegram"), false, `the page is retired for ${actor.role}`);
   }
   for (const actor of [manager, director]) {
     const w = mk(actor);
@@ -625,4 +626,15 @@ test("telegram groups: managers change the directory, salespeople only read it, 
     assert.throws(() => w.view.removeTelegramGroup("g"));
     assert.deepEqual(w.calls, []);
   }
+});
+
+test("the simplified CRM keeps customers, follow-ups and targets, and retires the other screens for everyone", () => {
+  for (const actor of [director, developer, manager, employee]) {
+    const u = fixture(actor).view.effectiveUser;
+    for (const page of ["visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports", "accounts", "telegram", "branches", "dept_dashboard", "teams"])
+      assert.equal(canAccessPage(u, page), false, `${actor.role}: ${page} is retired`);
+    for (const page of ["dashboard", "followups", "targets", "settings"]) assert.equal(canAccessPage(u, page), true, `${actor.role}: ${page} stays`);
+  }
+  assert.equal(canAccessPage(fixture(employee).view.effectiveUser, "clients"), true);
+  assert.equal(canAccessPage(fixture(developer).view.effectiveUser, "users"), true);
 });

@@ -1,30 +1,20 @@
 import { hasPermission } from "../../lib/permissions";
-import { canAccessPage, scopeLabel, isSales, worksOwnCustomers } from "../../lib/access";
+import { canAccessPage, worksOwnCustomers } from "../../lib/access";
 import { useEffect } from "react";
 import {
   Users,
-  Building2,
   PhoneCall,
-  ShoppingBag,
-  BarChart3,
-  Award,
   Code2,
   Settings,
-  FileText,
-  UserRound,
   X,
   LayoutDashboard,
   ChevronDown,
-  ArrowUpLeft,
-  Network,
   ShieldCheck,
   Target,
-  Landmark,
-  Send,
 } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { ShalabyLogo } from "../common/ShalabyLogo";
-import { followUpStatus, isManagement } from "../../lib/presentation";
+import { followUpStatus } from "../../lib/presentation";
 
 interface Props {
   activeTab: string;
@@ -111,50 +101,18 @@ export function Sidebar({
           {nav("clients", "العملاء", Users)}
           {nav(
             "followups",
-            worksOwnCustomers(effectiveUser) ? "متابعاتي" : "متابعة أداء الموظفين",
+            worksOwnCustomers(effectiveUser) ? "متابعاتي" : "المتابعات",
             PhoneCall,
             count,
           )}
-          {nav("telegram", "جروبات التليجرام", Send)}
-          <p className="nav-group-label">المبيعات</p>
-          {nav("bookings", "المشتريات", ShoppingBag)}
-          {nav("targets", hasPermission(effectiveUser, "targets.view") ? "الأهداف" : "هدفي", Target)}
-          {nav("overview", "كبار العملاء والوسطاء", Award)}
-          {nav("brokers", "الوسطاء والشركاء", UserRound)}
-          {nav(
-            "reports",
-            isManagement(effectiveUser) ? "التقارير" : "أدائي",
-            BarChart3,
-          )}
-          {nav("accounts", "الحسابات", Landmark)}
-          {[
-            "users",
-            "branches",
-            "audit",
-            "dept_dashboard",
-            "permissions",
-            "developer",
-          ].some((page) => canAccessPage(effectiveUser, page)) && (
-            <details
-              className="nav-management"
-              open={
-                [
-                  "users",
-                  "branches",
-                  "audit",
-                  "dept_dashboard",
-                  "permissions",
-                  "developer",
-                ].includes(activeTab) || undefined
-              }
-            >
+          {nav("targets", hasPermission(effectiveUser, "targets.view") ? "الأهداف والأداء" : "هدفي", Target)}
+          {["users", "audit", "permissions", "developer"].some((page) => canAccessPage(effectiveUser, page)) && (
+            <details className="nav-management" open={["users", "audit", "permissions", "developer"].includes(activeTab) || undefined}>
               <summary>
-                إدارة المؤسسة
+                الإدارة
                 <ChevronDown size={15} />
               </summary>
               {nav("users", "الموظفون", Users)}
-              {nav("branches", "الهيكل الإداري", Network)}
-              {nav("dept_dashboard", "الأقسام والفروع", Building2)}
               {nav("audit", "سجل العمليات", ShieldCheck)}
               {nav("permissions", "مصفوفة الصلاحيات", ShieldCheck)}
               {nav("developer", "قسم المطورين", Code2)}
@@ -163,16 +121,8 @@ export function Sidebar({
         </nav>
         <div className="sidebar-bottom">
           {nav("settings", "الإعدادات", Settings)}
-          <div className="branch-caption">
-            <Building2 size={17} />
-            <div>
-              <small>نطاق العمل</small>
-              <span>{scopeLabel(effectiveUser)}</span>
-            </div>
-            <ArrowUpLeft size={15} />
-          </div>
           <p>
-            شلبي <span>·</span> تفاصيل وجودة تليق بذوقك
+            شلبي <span>·</span> العملاء والمتابعات والأهداف
           </p>
         </div>
       </aside>

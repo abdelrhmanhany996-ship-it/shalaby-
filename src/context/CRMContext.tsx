@@ -306,8 +306,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   const [warehouses, setWarehouses] = useState<Warehouse[]>(() =>
     loadStorage<Warehouse[]>("warehouses", []),
   );
+  // A fresh system starts with one branch. Branches are not managed in the simplified CRM, but every record is still
+  // filed under one (the security rules scope by it), so this is the branch everyone works in unless more exist.
   const [branches, setBranches] = useState<Branch[]>(() =>
-    loadStorage<Branch[]>("branches", []),
+    loadStorage<Branch[]>("branches", [{ id: "br-main", name: "الفرع الرئيسي", code: "MAIN", city: "", phone: "", address: "", active: true, branchType: "main_hq" }]),
   );
   const [teams, setTeams] = useState<Team[]>(() =>
     loadStorage<Team[]>("teams", []),

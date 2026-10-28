@@ -134,3 +134,50 @@ test("employee_targets reports each person's own numbers and never invents a tar
   assert.equal(behind.rows.length, 1);
   assert.ok(String((runTool("employee_targets", {}, { ...d, targetSettings: undefined }) as { error: string }).error).length > 0);
 });
+
+test("employee_performance gives one person's real numbers, months, and follow-up evidence; unknown names are refused", () => {
+  const users = [{ id: "u1", name: "أحمد سمير", role: "sales_agent", active: true, branchId: "b1" }, { id: "u2", name: "أحمد علي", role: "sales_agent", active: true, branchId: "b1" }] as ToolData["users"];
+  const bookings = [
+    { id: "k1", agentId: "u1", bookingStatus: "confirmed", bookingDate: "2026-10-05", amount: 4000, department: "general", leadId: "l1" },
+    { id: "k2", agentId: "u1", bookingStatus: "confirmed", bookingDate: "2026-09-05", amount: 9000, department: "general", leadId: "l1" },
+  ] as ToolData["bookings"];
+  const targets = [{ id: "tgt-u1-2026-10", userId: "u1", month: "2026-10", amount: 10000 }, { id: "tgt-u1-2026-09", userId: "u1", month: "2026-09", amount: 10000 }] as EmployeeTarget[];
+  const followUps = [
+    { id: "f1", leadId: "l1", leadName: "عميل", assignedAgentId: "u1", branchId: "b1", scheduledAt: "2026-10-10", reason: "x", type: "call", notes: "", status: "overdue", rescheduleCount: 2 },
+    { id: "f2", leadId: "l1", leadName: "عميل", assignedAgentId: "u1", branchId: "b1", scheduledAt: "2026-10-12", reason: "x", type: "call", notes: "", status: "completed", completedAt: "2026-10-12T10:00:00Z" },
+  ] as ToolData["followUps"];
+  const d = { today: "2026-10-20", leads: [{ id: "l1", name: "عميل", assignedAgentId: "u1", status: "interested", branchId: "b1", createdAt: "2026-10-01" }], bookings, followUps, visits: [], notBoughtRecords: [], brokers: [], users, branches: [{ id: "b1", name: "الفرع" }], employeeTargets: targets, targetSettings: defaultTargetSettings } as unknown as ToolData;
+  const r = runTool("employee_performance", { agent: "أحمد سمير", months: 2 }, d) as any;
+  assert.equal(r.employee, "أحمد سمير");
+  assert.deepEqual([r.thisMonth.targetEGP, r.thisMonth.achievedEGP, r.thisMonth.percent], [10000, 4000, 40]);
+  assert.deepEqual(r.previousMonths.map((m: any) => [m.month, m.percent]), [["2026-09", 90], ["2026-08", 0]]);
+  assert.deepEqual([r.followUps.open, r.followUps.overdue, r.followUps.oldestOverdueDays, r.followUps.completedLast30Days, r.followUps.completedOnTimeLast30Days, r.followUps.movedTimes], [1, 1, 10, 1, 1, 2]);
+  assert.equal(r.customers, 1);
+  assert.equal((runTool("employee_performance", { agent: "أحمد" }, d) as any).ambiguous, true);
+  assert.ok(String((runTool("employee_performance", { agent: "مش موجود" }, d) as any).error).length > 0);
+});
+
+test("attention_needed lists overdue and today's follow-ups, and interested customers nobody follows", () => {
+  const leads = [
+    { id: "l1", name: "عميل متأخر", assignedAgentId: "u1", status: "interested", branchId: "b1", createdAt: "2026-09-01", lastContactDate: "2026-10-18" },
+    { id: "l2", name: "عميل منسي", assignedAgentId: "u1", status: "prospect", branchId: "b1", createdAt: "2026-08-01", lastContactDate: "2026-09-20" },
+    { id: "l3", name: "عميل جديد", assignedAgentId: "u1", status: "interested", branchId: "b1", createdAt: "2026-10-15" },
+    { id: "l4", name: "اشترى", assignedAgentId: "u1", status: "booked", branchId: "b1", createdAt: "2026-01-01" },
+  ];
+  const followUps = [
+    { id: "f1", leadId: "l1", leadName: "عميل متأخر", assignedAgentId: "u1", branchId: "b1", scheduledAt: "2026-10-15", reason: "عرض", type: "call", notes: "", status: "overdue", priority: "high" },
+    { id: "f2", leadId: "l1", leadName: "عميل متأخر", assignedAgentId: "u1", branchId: "b1", scheduledAt: "2026-10-20T15:00", reason: "اتصال", type: "call", notes: "", status: "due" },
+    { id: "f3", leadId: "l1", leadName: "عميل متأخر", assignedAgentId: "u1", branchId: "b1", scheduledAt: "2026-11-01", reason: "بعدين", type: "call", notes: "", status: "upcoming" },
+  ];
+  const d = { today: "2026-10-20", leads, bookings: [], followUps, visits: [], notBoughtRecords: [], brokers: [], users: [{ id: "u1", name: "سالي", role: "sales_agent", active: true, branchId: "b1" }], branches: [] } as unknown as ToolData;
+  const r = runTool("attention_needed", {}, d) as any;
+  assert.deepEqual([r.overdueCount, r.dueTodayCount], [1, 1]);
+  assert.deepEqual(r.followUps.rows.map((x: any) => [x.customer, x.daysLate, x.priority]), [["عميل متأخر", 5, "عالية"], ["عميل متأخر", 0, "عادية"]]);
+  assert.deepEqual(r.customersWithoutFollowUp.rows.map((x: any) => x.customer), ["عميل منسي"]);
+});
+
+test("the tools offered to the model are the simplified set", () => {
+  const names = zakiToolsFor({ targets: true, accounts: false }).map((t) => t.name);
+  for (const n of ["employee_performance", "attention_needed", "employee_targets", "list_followups", "get_customer"]) assert.ok(names.includes(n), n);
+  for (const n of ["top_brokers", "get_broker", "reviews", "feedback", "referrals", "employee_ratings", "accounting"]) assert.ok(!names.includes(n), n);
+});

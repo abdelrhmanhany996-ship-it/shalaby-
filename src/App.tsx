@@ -24,7 +24,7 @@ import {
   LeadQuickAction,
 } from "./components/common/LeadDetailsModal";
 
-import { DashboardPage } from "./pages/DashboardPage";
+import { HomePage } from "./pages/HomePage";
 import { LeadsPage } from "./pages/LeadsPage";
 import { AddLeadPage } from "./pages/AddLeadPage";
 import { VisitsPage } from "./pages/VisitsPage";
@@ -128,9 +128,8 @@ const AppContent: React.FC = () => {
               />
             )}
 
-            {(activeTab === "analytics_dashboard" ||
-              activeTab === "dashboard") && (
-              <DashboardPage
+            {activeTab === "dashboard" && (
+              <HomePage
                 setActiveTab={setActiveTab}
                 onOpenLead={handleOpenLead}
               />
