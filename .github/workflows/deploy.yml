@@ -47,9 +47,9 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'test' && 'test' || 'development' }}
     env:
       # Folder of each subdomain on Hostinger, relative to the FTP account root.
-      SERVER_DIR_MAIN: domains/shalaby.engsaber.space/public_html/
-      SERVER_DIR_DEV: domains/dev-shalaby.engsaber.space/public_html/
-      SERVER_DIR_TEST: domains/test-shalaby.engsaber.space/public_html/
+      SERVER_DIR_MAIN: domains/engsaber.space/public_html/shalaby-prod-site/
+      SERVER_DIR_DEV: domains/engsaber.space/public_html/shalaby-dev-site/
+      SERVER_DIR_TEST: domains/engsaber.space/public_html/shalaby-test-site/
     steps:
       - uses: actions/checkout@v4
         with:
