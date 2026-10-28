@@ -1,5 +1,5 @@
 import { branchLimitMessage, branchQuota, userLimitMessage, userQuota } from "./license";
-import { hasPermission, isDirector, withPermissions } from "./permissions";
+import { hasPermission, isDirector, isSalesCapable, withPermissions } from "./permissions";
 import type { CRMContextType } from "../context/CRMContext";
 import type { Lead, User, UserRole } from "../types/crm";
 import * as access from "./access";
@@ -45,6 +45,17 @@ export function createWorkspace(raw: CRMContextType) {
     raw.users,
     raw.teams,
   );
+  // Who a target can be about: people in the actor's branches. This does not need the staff directory permission
+  // (a branch manager sets their salespeople's targets without browsing the staff screen), so it is worked out on its own.
+  const targetUsers = raw.users
+    .filter((u) => u.role !== "admin" || actor.role === "admin")
+    .filter(
+      (u) =>
+        u.id === actor.id ||
+        (hasPermission(actor, "targets.view") &&
+          (access.isGlobalManager(actor) || (!!u.branchId && access.canSeeBranch(actor, u.branchId, raw.branches)))),
+    )
+    .map((u) => ({ ...u, permissions: undefined }));
   const branches = raw.branches
     .filter((b) => access.canSeeBranch(actor, b.id, raw.branches))
     .map((b) => {
@@ -235,6 +246,7 @@ export function createWorkspace(raw: CRMContextType) {
   const visibleReviewIds = new Set(visibleReviews.map((r) => r.id));
   const view = {
     ...raw,
+    targetUsers,
     effectiveUser: actor,
     invoiceCustomers,
     invoiceAgents,
@@ -418,6 +430,57 @@ export function createWorkspace(raw: CRMContextType) {
       requireAssignment(data.branchId, data.assignedAgentId);
       return raw.addFollowUp(data);
     }) as CRMContextType["addFollowUp"],
+    // Targets: managers see their scope's rows; a salesperson sees only their own.
+    employeeTargets: (raw.employeeTargets ?? []).filter((t) =>
+      hasPermission(actor, "targets.view")
+        ? t.userId === actor.id || targetUsers.some((u) => u.id === t.userId)
+        : t.userId === actor.id,
+    ),
+    setEmployeeTarget: ((userId, month, amount, note) => {
+      require(hasPermission(actor, "targets.manage"));
+      const target = targetUsers.find((u) => u.id === userId);
+      require(!!target && target.active && isSalesCapable(target));
+      // Nobody sets their own target, except the owner and the developer.
+      require(userId !== actor.id || isDirector(actor));
+      return raw.setEmployeeTarget(userId, month, amount, note);
+    }) as CRMContextType["setEmployeeTarget"],
+    removeEmployeeTarget: ((userId, month) => {
+      require(hasPermission(actor, "targets.manage"));
+      require(targetUsers.some((u) => u.id === userId));
+      raw.removeEmployeeTarget(userId, month);
+    }) as CRMContextType["removeEmployeeTarget"],
+    updateTargetSettings: ((patch) => {
+      require(hasPermission(actor, "targets.manage") && ["admin", "general_manager", "regional_manager"].includes(actor.role));
+      raw.updateTargetSettings(patch);
+    }) as CRMContextType["updateTargetSettings"],
+    // Accounting: only people with the accounts permission, and the server only opens the books to the same people.
+    accountEntries: hasPermission(actor, "accounts.view") ? (raw.accountEntries ?? []) : [],
+    addAccountEntry: ((input) => {
+      require(hasPermission(actor, "accounts.manage"));
+      return raw.addAccountEntry(input);
+    }) as CRMContextType["addAccountEntry"],
+    voidAccountEntry: ((id, reason) => {
+      require(hasPermission(actor, "accounts.manage") && (raw.accountEntries ?? []).some((e) => e.id === id));
+      raw.voidAccountEntry(id, reason);
+    }) as CRMContextType["voidAccountEntry"],
+    correctAccountEntry: ((id, input, reason) => {
+      require(hasPermission(actor, "accounts.manage") && (raw.accountEntries ?? []).some((e) => e.id === id));
+      return raw.correctAccountEntry(id, input, reason);
+    }) as CRMContextType["correctAccountEntry"],
+    updateAccountingSettings: ((next) => {
+      require(hasPermission(actor, "accounts.manage"));
+      raw.updateAccountingSettings(next);
+    }) as CRMContextType["updateAccountingSettings"],
+    rescheduleFollowUp: ((id, ...args) => {
+      const task = followUps.find((f) => f.id === id);
+      require(!!task && access.canManageFollowUp(actor, task));
+      raw.rescheduleFollowUp(id, ...args);
+    }) as CRMContextType["rescheduleFollowUp"],
+    updateFollowUpDetails: ((id, patch) => {
+      const task = followUps.find((f) => f.id === id);
+      require(!!task && access.canManageFollowUp(actor, task));
+      raw.updateFollowUpDetails(id, patch);
+    }) as CRMContextType["updateFollowUpDetails"],
     updateFollowUpResult: ((id, ...args) => {
       const task = followUps.find((f) => f.id === id);
       require(!!task && access.canCompleteFollowUp(actor, task));

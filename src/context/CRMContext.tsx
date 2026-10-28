@@ -6,11 +6,14 @@ import {
 import { createWorkspace } from "../lib/workspace";
 import { newReviewToken } from "../lib/reviews";
 import { REFERRAL_FOLLOWUP_DAYS, isReferralPhone, phoneKey } from "../lib/referrals";
-import { scopesFor, seesAll } from "../lib/scopes";
+import { scopesFor, seesAll, seesAccounts } from "../lib/scopes";
 import { defaultLicense, type License } from "../lib/license";
 import { asDemo, planDemoRemoval, type DemoWorld, type KnownDemoIds } from "../lib/demoScope";
 import { egyptGovernorates, findEgyptGovernorate } from "../data/egypt";
 import { today, followUpStatus, statusNames, sourceNames, followUpTypeNames } from "../lib/presentation";
+import { rescheduled } from "../lib/followUps";
+import { defaultTargetSettings, sanitizeTargetSettings, targetId, withAmount } from "../lib/targets";
+import { defaultAccountingSettings, newEntry, sanitizeAccountingSettings, voided, type EntryInput } from "../lib/accounting";
 import {
   upcomingPostSale,
   addToDate,
@@ -44,6 +47,11 @@ import {
   Lead,
   Visit,
   FollowUp,
+  FollowUpPriority,
+  EmployeeTarget,
+  TargetSettings,
+  AccountEntry,
+  AccountingSettings,
   Booking,
   TimelineEvent,
   AuditLog,
@@ -213,6 +221,22 @@ export interface CRMContextType {
     extra?: FollowUpExtra,
   ) => void;
 
+  employeeTargets: EmployeeTarget[];
+  targetSettings: TargetSettings;
+  setEmployeeTarget: (userId: string, month: string, amount: number, note?: string) => EmployeeTarget;
+  removeEmployeeTarget: (userId: string, month: string) => void;
+  updateTargetSettings: (patch: Partial<TargetSettings>) => void;
+
+  accountEntries: AccountEntry[];
+  accountingSettings: AccountingSettings;
+  addAccountEntry: (input: EntryInput) => AccountEntry;
+  voidAccountEntry: (id: string, reason: string) => void;
+  correctAccountEntry: (id: string, input: EntryInput, reason: string) => AccountEntry;
+  updateAccountingSettings: (settings: AccountingSettings) => void;
+
+  rescheduleFollowUp: (id: string, scheduledAt: string, reason: string) => void;
+  updateFollowUpDetails: (id: string, patch: { priority?: FollowUpPriority; reason?: string; notes?: string }) => void;
+
   // Booking Operations
   addBooking: (booking: Omit<Booking, "id" | "createdAt">) => Booking;
   addNotBoughtRecord: (
@@ -307,6 +331,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => saveStorage("not_bought", notBoughtRecords), [notBoughtRecords]);
   const [reminderDone, setReminderDone] = useState<ReminderDone[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>([]);
+  const [employeeTargets, setEmployeeTargets] = useState<EmployeeTarget[]>([]);
+  const [targetSettings, setTargetSettings] = useState<TargetSettings>(defaultTargetSettings);
+  const [accountEntries, setAccountEntries] = useState<AccountEntry[]>([]);
+  const [accountingSettings, setAccountingSettings] = useState<AccountingSettings>(defaultAccountingSettings);
   const [reviewRequests, setReviewRequests] = useState<ReviewRequest[]>([]);
   const [reviewNotes, setReviewNotes] = useState<ReviewNote[]>([]);
   const [leads, setLeads] = useState<Lead[]>(() =>
@@ -360,11 +388,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     () =>
       scopesFor(
         authForScope
-          ? { role: authForScope.role, userId: authForScope.userId, branchId: authForScope.branchId, supervisedBranchIds: authForScope.supervisedBranchIds }
+          ? { role: authForScope.role, userId: authForScope.userId, branchId: authForScope.branchId, supervisedBranchIds: authForScope.supervisedBranchIds, specialty: authForScope.specialty }
           : null,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [authForScope?.role, authForScope?.userId, authForScope?.branchId, JSON.stringify(authForScope?.supervisedBranchIds ?? [])],
+    [authForScope?.role, authForScope?.userId, authForScope?.branchId, authForScope?.specialty, JSON.stringify(authForScope?.supervisedBranchIds ?? [])],
   );
 
   // Only top management may write the shared setup (structure, catalogue, settings), so only they seed it.
@@ -398,6 +426,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   useFirestoreCollection("bookings", bookings, setBookings, { scope: scope.bookings });
   useFirestoreCollection("timelineEvents", timelineEvents, setTimelineEvents, { scope: scope.timeline });
   useFirestoreCollection("activityLogs", auditLogs, setAuditLogs, { scope: scope.audit });
+  useFirestoreCollection("employeeTargets", employeeTargets, setEmployeeTargets, { scope: scope.employeeTargets });
+  useFirestoreCollection("accountingEntries", accountEntries, setAccountEntries, { scope: scope.accounting });
+  const targetsWriter = !!authForScope && ["admin", "general_manager", "regional_manager"].includes(authForScope.role);
+  const accountsReader = !!authForScope && seesAccounts({ role: authForScope.role, userId: authForScope.userId, specialty: authForScope.specialty });
+  useFirestoreDocument(["settings", "targets"], targetSettings, (v) => setTargetSettings(sanitizeTargetSettings(v)), { canWrite: targetsWriter });
+  useFirestoreDocument(["accountingSettings", "main"], accountingSettings, (v) => setAccountingSettings(sanitizeAccountingSettings(v)), { canWrite: accountsReader, enabled: accountsReader });
   useFirestoreDocument(["settings", "license"], license, setLicense, { canWrite: authForScope?.role === "admin" });
   useFirestoreDocument(["settings", "distribution"], distributionRule, setDistributionRule, { canWrite: topWriter });
   useFirestoreDocument(["settings", "permissions"], permissionMatrix, (m) =>
@@ -478,8 +512,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!profilesBackfilled.current && users.length) {
       profilesBackfilled.current = true;
       users.forEach((u) => {
-        if (u.authUid && u.supervisedBranchIds?.length)
-          updateDoc(doc(db, "authProfiles", u.authUid), { supervisedBranchIds: u.supervisedBranchIds }).catch(() => {});
+        if (u.authUid && (u.supervisedBranchIds?.length || u.specialty))
+          updateDoc(doc(db, "authProfiles", u.authUid), {
+            ...(u.supervisedBranchIds?.length ? { supervisedBranchIds: u.supervisedBranchIds } : {}),
+            ...(u.role === "supervisor" && u.specialty ? { specialty: u.specialty } : {}),
+          }).catch(() => {});
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1194,6 +1231,97 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     logAudit("تحديث متابعة", "متابعة", id, `تحديث نتيجة المتابعة برقم ${id}`);
   };
 
+  const rescheduleFollowUp = (id: string, scheduledAt: string, reason: string) => {
+    const original = followUps.find((f) => f.id === id);
+    if (!original) return;
+    const next = rescheduled(original, scheduledAt, { id: effectiveUser.id, name: effectiveUser.name }, reason, new Date().toISOString());
+    setFollowUps((prev) => prev.map((f) => (f.id === id ? next : f)));
+    if (original.leadId)
+      addTimelineEvent({
+        leadId: original.leadId,
+        authorId: effectiveUser.id,
+        authorName: effectiveUser.name,
+        type: "followup_created",
+        title: "تأجيل متابعة",
+        details: `من ${original.scheduledAt.replace("T", " ")} إلى ${scheduledAt.replace("T", " ")}. السبب: ${reason.trim()}`,
+      });
+    // The customer's "next follow-up" follows the earliest open one.
+    if (original.leadId)
+      updateLead(original.leadId, {
+        nextFollowUpDate: [
+          ...followUps.filter((f) => f.leadId === original.leadId && f.id !== id && !["completed", "cancelled"].includes(followUpStatus(f))).map((f) => f.scheduledAt),
+          scheduledAt,
+        ].sort()[0],
+      });
+    logAudit("تأجيل متابعة", "متابعة", id, `تأجيل متابعة ${original.leadName} من ${original.scheduledAt.replace("T", " ")} إلى ${scheduledAt.replace("T", " ")}: ${reason.trim()}`);
+  };
+
+  const updateFollowUpDetails = (id: string, patch: { priority?: FollowUpPriority; reason?: string; notes?: string }) => {
+    const original = followUps.find((f) => f.id === id);
+    if (!original || ["completed", "cancelled"].includes(original.status)) return;
+    const clean: Partial<FollowUp> = {};
+    if (patch.priority) clean.priority = patch.priority;
+    if (patch.reason !== undefined && patch.reason.trim()) clean.reason = patch.reason.trim();
+    if (patch.notes !== undefined) clean.notes = patch.notes.trim();
+    if (!Object.keys(clean).length) return;
+    setFollowUps((prev) => prev.map((f) => (f.id === id ? { ...f, ...clean } : f)));
+    logAudit("تعديل متابعة", "متابعة", id, `تعديل متابعة ${original.leadName}${clean.priority ? ` (الأولوية: ${clean.priority})` : ""}`);
+  };
+
+  // Employee targets
+  const setEmployeeTarget = (userId: string, month: string, amount: number, note?: string): EmployeeTarget => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) throw new Error("الموظف غير موجود.");
+    const existing = employeeTargets.find((t) => t.id === targetId(userId, month));
+    const row = withAmount(existing, user, month, amount, note, { id: effectiveUser.id, name: effectiveUser.name }, new Date().toISOString());
+    setEmployeeTargets((prev) => (existing ? prev.map((t) => (t.id === row.id ? row : t)) : [row, ...prev]));
+    logAudit(existing ? "تعديل هدف موظف" : "تحديد هدف موظف", "هدف", row.id, `${user.name} · ${month}: ${existing ? `${existing.amount.toLocaleString("en-US")} ← ` : ""}${amount.toLocaleString("en-US")} ج.م`);
+    return row;
+  };
+  const removeEmployeeTarget = (userId: string, month: string) => {
+    const existing = employeeTargets.find((t) => t.id === targetId(userId, month));
+    if (!existing) return;
+    setEmployeeTargets((prev) => prev.filter((t) => t.id !== existing.id));
+    logAudit("حذف هدف موظف", "هدف", existing.id, `${existing.userName} · ${existing.month}: كان ${existing.amount.toLocaleString("en-US")} ج.م`);
+  };
+  const updateTargetSettings = (patch: Partial<TargetSettings>) => {
+    const next = sanitizeTargetSettings({ ...targetSettings, ...patch });
+    setTargetSettings(next);
+    logAudit("تعديل قواعد الأهداف", "هدف", "settings", `حدّ التأخر ${next.behindBelow}% · التحقق ${next.achievedFrom}% · ${next.paceAware ? "حسب سرعة الشهر" : "من الهدف الكامل"}`);
+  };
+
+  // Accounting: entries are never edited or removed, only voided, so the books can always be traced.
+  const addAccountEntry = (input: EntryInput): AccountEntry => {
+    const entry = newEntry(input, accountingSettings, `acc-${crypto.randomUUID()}`, { id: effectiveUser.id, name: effectiveUser.name }, new Date().toISOString(), today());
+    setAccountEntries((prev) => [entry, ...prev]);
+    logAudit("تسجيل حركة مالية", "حركة مالية", entry.id, `${entry.type === "income" ? "إيراد" : "مصروف"} ${entry.amount.toLocaleString("en-US")} ج.م: ${entry.description}`);
+    return entry;
+  };
+  const voidAccountEntry = (id: string, reason: string) => {
+    const original = accountEntries.find((e) => e.id === id);
+    if (!original) return;
+    const next = voided(original, reason, { id: effectiveUser.id, name: effectiveUser.name }, new Date().toISOString());
+    setAccountEntries((prev) => prev.map((e) => (e.id === id ? next : e)));
+    logAudit("إلغاء حركة مالية", "حركة مالية", id, `إلغاء ${original.amount.toLocaleString("en-US")} ج.م (${original.description}): ${reason.trim()}`);
+  };
+  const correctAccountEntry = (id: string, input: EntryInput, reason: string): AccountEntry => {
+    const original = accountEntries.find((e) => e.id === id);
+    if (!original) throw new Error("الحركة غير موجودة.");
+    const by = { id: effectiveUser.id, name: effectiveUser.name };
+    const now = new Date().toISOString();
+    // Both checks run before anything is saved, so a correction either happens completely or not at all.
+    const next = voided(original, reason, by, now);
+    const fresh = newEntry(input, accountingSettings, `acc-${crypto.randomUUID()}`, by, now, today(), id);
+    setAccountEntries((prev) => [fresh, ...prev.map((e) => (e.id === id ? next : e))]);
+    logAudit("تصحيح حركة مالية", "حركة مالية", fresh.id, `تصحيح ${original.amount.toLocaleString("en-US")} ← ${fresh.amount.toLocaleString("en-US")} ج.م (${reason.trim()})`);
+    return fresh;
+  };
+  const updateAccountingSettings = (next: AccountingSettings) => {
+    const clean = sanitizeAccountingSettings(next);
+    setAccountingSettings(clean);
+    logAudit("تعديل إعدادات الحسابات", "حسابات", "settings", `${clean.accounts.length} حساب و${clean.categories.length} تصنيف`);
+  };
+
   // Booking Operations
   /** The post-sale follow-ups still ahead for a purchase, with fixed ids so doing it twice can never double them. */
   const postSaleFollowUps = (booking: Booking, have: Set<string | undefined>): FollowUp[] => {
@@ -1333,7 +1461,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   // Keep the server-trusted access record in step with the user document.
   const syncAuthProfile = (
     userId: string,
-    patch: { role?: User["role"]; branchId?: string; active?: boolean; name?: string; supervisedBranchIds?: string[] },
+    patch: { role?: User["role"]; branchId?: string; active?: boolean; name?: string; supervisedBranchIds?: string[]; specialty?: string },
   ) => {
     const authUid = users.find((u) => u.id === userId)?.authUid;
     if (!authUid) return;
@@ -1354,6 +1482,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
       branchId: updates.branchId,
       name: updates.name,
       supervisedBranchIds: updates.supervisedBranchIds,
+      // Only a supervisor has a specialty, so leaving that role clears it.
+      specialty: updates.role && updates.role !== "supervisor" ? "" : updates.specialty,
     });
     const target = users.find((u) => u.id === id);
     const labels: Record<string, string> = { name: "الاسم", phone: "الهاتف", email: "الإيميل", role: "الدور", branchId: "الفرع", teamId: "الفريق", departmentId: "القسم", jobPositionId: "المسمى الوظيفي", directManagerId: "المدير المباشر", supervisedBranchIds: "نطاق الإشراف", specialty: "الاختصاص" };
@@ -1889,6 +2019,19 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
 
         addFollowUp,
         updateFollowUpResult,
+        rescheduleFollowUp,
+        updateFollowUpDetails,
+        employeeTargets,
+        targetSettings,
+        setEmployeeTarget,
+        removeEmployeeTarget,
+        updateTargetSettings,
+        accountEntries,
+        accountingSettings,
+        addAccountEntry,
+        voidAccountEntry,
+        correctAccountEntry,
+        updateAccountingSettings,
 
         addBooking,
         addNotBoughtRecord,

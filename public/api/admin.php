@@ -276,6 +276,9 @@ if ($action === 'create_login') {
         'active' => ['booleanValue' => true],
     ];
     if ($branch) $profile['branchId'] = ['stringValue' => $branch];
+    // The accounts books are open to supervisors whose specialty is accounts, so the rules need it on the trusted profile.
+    $specialty = f($userDoc, 'specialty');
+    if ($specialty && $role === 'supervisor') $profile['specialty'] = ['stringValue' => $specialty];
     if ($supervised) $profile['supervisedBranchIds'] = ['arrayValue' => ['values' => $supervised]];
     [$sp] = http('PATCH', fs_url('authProfiles/' . rawurlencode($uid)), ['Authorization: Bearer ' . $token, 'Content-Type: application/json'], json_encode(['fields' => $profile]));
     [$su] = http(

@@ -1,3 +1,4 @@
+import { hasPermission } from "../../lib/permissions";
 import { canAccessPage, scopeLabel, isSales, worksOwnCustomers } from "../../lib/access";
 import { useEffect } from "react";
 import {
@@ -19,6 +20,8 @@ import {
   Network,
   ShieldCheck,
   MessageSquareWarning,
+  Target,
+  Landmark,
 } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { ShalabyLogo } from "../common/ShalabyLogo";
@@ -123,6 +126,7 @@ export function Sidebar({
           {nav("feedback", "التقييمات والشكاوى", MessageSquareWarning, feedbackCount)}
           <p className="nav-group-label">المبيعات</p>
           {nav("bookings", "المشتريات", ShoppingBag)}
+          {nav("targets", hasPermission(effectiveUser, "targets.view") ? "الأهداف" : "هدفي", Target)}
           {nav("overview", "كبار العملاء والوسطاء", Award)}
           {nav("brokers", "الوسطاء والشركاء", UserRound)}
           {nav(
@@ -130,6 +134,7 @@ export function Sidebar({
             isManagement(effectiveUser) ? "التقارير" : "أدائي",
             BarChart3,
           )}
+          {nav("accounts", "الحسابات", Landmark)}
           {[
             "users",
             "branches",

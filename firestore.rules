@@ -48,6 +48,12 @@ service cloud.firestore {
         && !(newRole in ['admin', 'general_manager', 'regional_manager']);
     }
 
+    // The books: the owner, the developer, and supervisors whose specialty is accounts (copied to the trusted profile).
+    function isAccounts() {
+      return isStaff() && (role() in ['admin', 'general_manager']
+        || (role() == 'supervisor' && get(profilePath()).data.get('specialty', '') == 'accounts'));
+    }
+
     function isBranchManager() {
       return isStaff() && role() == 'branch_manager';
     }
@@ -209,7 +215,49 @@ service cloud.firestore {
     match /settings/{docId} {
       allow read: if isStaff();
       // The plan (how many branches) is set by the developer only.
-      allow write: if isTop() && (docId != 'license' || role() == 'admin');
+      // Target rules are set by the owner, the developer and the general sales manager.
+      allow write: if (isTop() && (docId != 'license' || role() == 'admin'))
+        || (docId == 'targets' && isRegional());
+    }
+
+    // ---------- accounting ----------
+    // Entries are append-only: never edited, never deleted. The only change allowed is cancelling a posted entry
+    // (status -> void, with who, when and why); every other field must stay exactly as it was.
+    match /accountingEntries/{docId} {
+      allow read: if isAccounts();
+      allow create: if isAccounts()
+        && request.resource.data.status == 'posted'
+        && request.resource.data.type in ['income', 'expense']
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.createdById == profile().userId;
+      allow update: if isAccounts()
+        && resource.data.status == 'posted'
+        && request.resource.data.status == 'void'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'voidedAt', 'voidedById', 'voidedByName', 'voidReason'])
+        && request.resource.data.voidedById == profile().userId
+        && request.resource.data.voidReason is string
+        && request.resource.data.voidReason.size() >= 3;
+      allow delete: if false;
+    }
+
+    // Account list, opening balances and categories: only the people who keep the books.
+    match /accountingSettings/{docId} {
+      allow read, write: if isAccounts();
+    }
+
+    // Monthly sales targets: one row per employee per month. A salesperson reads only their own row.
+    // Managers set targets inside their branches, never their own (the owner and developer excepted).
+    match /employeeTargets/{docId} {
+      allow read: if rowOk(resource.data, 'userId');
+      allow create, update: if isManager()
+        && request.resource.data.userId is string
+        && (isTop() || request.resource.data.userId != profile().userId)
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0
+        && branchOk(request.resource.data.branchId)
+        && (request.method == 'create' || (branchOk(resource.data.branchId) && resource.data.userId == request.resource.data.userId));
+      allow delete: if isManager() && branchOk(resource.data.branchId);
     }
 
     // ---------- day-to-day sales data: every row is scoped on the server ----------

@@ -29,6 +29,8 @@ export interface AuthProfile {
   branchId?: string;
   /** Branches a supervisor / regional manager covers; the security rules read this. */
   supervisedBranchIds?: string[];
+  /** A supervisor's field (sales / accounts / operations). The accounts books are open to the "accounts" specialty. */
+  specialty?: string;
   active: boolean;
   loginId?: string; // mobile number / username shown to the person
   mustChangePassword?: boolean; // set after an admin reset

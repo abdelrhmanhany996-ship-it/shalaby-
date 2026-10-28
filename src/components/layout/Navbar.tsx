@@ -48,6 +48,8 @@ const titles: Record<string, string> = {
   branches: "الهيكل الإداري",
   teams: "فرق العمل",
   audit: "سجل العمليات",
+  targets: "الأهداف",
+  accounts: "الحسابات",
   settings: "الإعدادات",
 };
 export function Navbar({

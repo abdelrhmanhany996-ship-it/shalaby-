@@ -1,6 +1,6 @@
 import { CustomerBrief } from "../components/common/CustomerBrief";
 import { REFERRAL_MIN_STARS, isReferralPhone } from "../lib/referrals";
-import { canCompleteFollowUp, canAccessPage, isSales, worksOwnCustomers } from "../lib/access";
+import { canCompleteFollowUp, canManageFollowUp, canAccessPage, isSales, worksOwnCustomers } from "../lib/access";
 import { hasPermission } from "../lib/permissions";
 import { useState } from "react";
 import {
@@ -12,9 +12,13 @@ import {
   X,
   Clock3,
   Star,
+  Bell,
+  CalendarClock,
 } from "lucide-react";
 import { useCRM } from "../context/CRMContext";
-import { followUpStatus, phoneNumber } from "../lib/presentation";
+import { followUpStatus, phoneNumber, today } from "../lib/presentation";
+import { bucketize, cairoTime, interrupting, joinSchedule, pendingReminders, priorityNames, priorityOf, timeOfDay } from "../lib/followUps";
+import type { FollowUpPriority } from "../types/crm";
 import type { FollowUp } from "../types/crm";
 import { useDialog } from "../components/common/useDialog";
 import { milestoneLabel } from "../lib/postSale";
@@ -25,6 +29,7 @@ import { reminderTasks, type ReminderTask } from "../lib/reminders";
 import { PageGuide } from "../components/common/PageGuide";
 import { PostVisitReview } from "../components/common/PostVisitReview";
 import { SuggestionsTab } from "../components/followups/SuggestionsTab";
+import { DailyPlan } from "../components/followups/DailyPlan";
 import { lastOutcome } from "../lib/purchases";
 import { VoiceNoteField } from "../components/common/VoiceNoteField";
 import type { LeadQuickAction } from "../components/common/LeadDetailsModal";
@@ -33,15 +38,23 @@ interface Props {
   initialTab?: "due" | "overdue";
 }
 export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
-  const { effectiveUser, leads, branches, followUps, updateFollowUpResult, reviewRequests, addReferralLead, bookings, notBoughtRecords, visits, brokers, reminderDone, markReminderDone, markReviewReminderSent, aiSuggestions } =
+  const { effectiveUser, leads, branches, followUps, updateFollowUpResult, rescheduleFollowUp, updateFollowUpDetails, reviewRequests, addReferralLead, bookings, notBoughtRecords, visits, brokers, reminderDone, markReminderDone, markReviewReminderSent, aiSuggestions } =
     useCRM();
   // The one 48-hour nudge for review requests the customer has not answered.
   const tasks = reminderTasks({ visits, reviewRequests, leads, brokers, reminderDone }, effectiveUser.id);
-  const [view, setView] = useState<"followups" | "reminders" | "suggestions">("followups");
+  const [view, setView] = useState<"followups" | "reminders" | "suggestions" | "plan">("followups");
   const [origin, setOrigin] = useState<"all" | "manual" | "auto" | "zaki">("all");
   const [confirming, setConfirming] = useState("");
   const [toast, setToast] = useState("");
   const [showDone, setShowDone] = useState(false);
+  const [bucket, setBucket] = useState<"open" | "overdue" | "today" | "upcoming" | "completed">("open");
+  const [fPriority, setFPriority] = useState<"all" | FollowUpPriority>("all");
+  const [moving, setMoving] = useState<FollowUp | null>(null);
+  const [moveDate, setMoveDate] = useState("");
+  const [moveTime, setMoveTime] = useState("");
+  const [moveReason, setMoveReason] = useState("");
+  const [moveError, setMoveError] = useState("");
+  const [notifState, setNotifState] = useState<string>(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
   const [selected, setSelected] = useState<FollowUp | null>(null);
   const [result, setResult] = useState("");
   const [nextDate, setNextDate] = useState("");
@@ -65,6 +78,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
       (!q.trim() || f.leadName.includes(q.trim()) || (f.leadPhone || "").includes(q.trim()) || (f.reason || "").includes(q.trim())) &&
       (fBranch === "all" || f.branchId === fBranch) &&
       (fAgent === "all" || f.assignedAgentId === fAgent) &&
+      (fPriority === "all" || priorityOf(f) === fPriority) &&
       inDateRange(f.scheduledAt, fFrom, fTo),
   );
   const uniq = (l: string[]) => [...new Set(l.filter(Boolean))];
@@ -75,6 +89,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
     ? rated.reduce((s, f) => s + (f.satisfactionRating || 0), 0) / rated.length
     : 0;
   const ref = useDialog(!!selected, () => setSelected(null));
+  const moveRef = useDialog(!!moving, () => setMoving(null));
   const complete = (e: React.FormEvent) => {
     e.preventDefault();
     if (
@@ -121,11 +136,35 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
     setNextDate("");
     setHasNext(false);
   };
-  const byStatus = (st: string) => visible.filter((f) => followUpStatus(f) === st).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
-  const overdueList = byStatus("overdue");
-  const todayList = byStatus("due");
-  const upcomingList = byStatus("upcoming");
-  const finished = [...byStatus("completed"), ...byStatus("cancelled")];
+  const groups = bucketize(visible, today());
+  const overdueList = groups.overdue;
+  const todayList = groups.today;
+  const upcomingList = groups.upcoming;
+  const finished = [...groups.completed, ...groups.cancelled];
+  const myReminders = pendingReminders(followUps, effectiveUser.id, today(), cairoTime());
+  const myUrgent = myReminders.filter(interrupting).length;
+  const enableNotifications = async () => {
+    if (typeof Notification === "undefined") return;
+    setNotifState(await Notification.requestPermission());
+  };
+  const openMove = (f: FollowUp) => {
+    setMoving(f);
+    setMoveDate(f.scheduledAt.slice(0, 10));
+    setMoveTime(timeOfDay(f) ?? "");
+    setMoveReason("");
+    setMoveError("");
+  };
+  const submitMove = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!moving) return;
+    try {
+      rescheduleFollowUp(moving.id, joinSchedule(moveDate, moveTime), moveReason);
+      setMoving(null);
+      flash("اتأجلت المتابعة واتسجّل السبب.");
+    } catch (err) {
+      setMoveError(err instanceof Error ? err.message : "تعذر التأجيل.");
+    }
+  };
   const originLabel: Record<string, string> = { manual: "جدولها السيلز", auto: "تلقائية من السيستم", zaki: "اقتراح من زكي" };
   const flash = (text: string) => {
     setToast(text);
@@ -141,6 +180,9 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
           </button>
         )}
         <span className="followup-pills">
+          {priorityOf(f) !== "normal" && (
+            <span className={`status-pill ${priorityOf(f) === "high" ? "is-new" : ""}`}>أولوية {priorityNames[priorityOf(f)]}</span>
+          )}
           <span className="status-pill">{originLabel[originOf(f)]}</span>
           <span className={`status-pill ${section === "overdue" ? "is-new" : section === "done" ? "is-success" : section === "due" ? "is-warning" : ""}`}>
             {section === "overdue" ? "متأخرة" : section === "due" ? "النهارده" : section === "upcoming" ? "قادمة" : followUpStatus(f) === "cancelled" ? "ملغاة" : "تمت"}
@@ -156,6 +198,12 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
         </span>
         <span>{f.assignedAgentName}</span>
         <span dir="ltr">{f.leadPhone}</span>
+        {!!f.rescheduleCount && (
+          <span title={(f.rescheduleLog ?? []).map((r) => `${r.from.replace("T", " ")} ← ${r.to.replace("T", " ")}: ${r.reason}`).join("\n")}>
+            <CalendarClock size={14} />
+            اتأجلت {f.rescheduleCount} مرة
+          </span>
+        )}
       </div>
       {f.outcomeResult && <p>النتيجة: {f.outcomeResult}</p>}
       {f.satisfactionRating && (
@@ -183,6 +231,26 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
             <Check size={15} />
             تسجيل النتيجة
           </button>
+        )}
+        {section !== "done" && canManageFollowUp(effectiveUser, f) && (
+          <button className="btn-secondary" onClick={() => openMove(f)}>
+            <CalendarClock size={14} />
+            تأجيل
+          </button>
+        )}
+        {section !== "done" && canManageFollowUp(effectiveUser, f) && (
+          <select
+            className="btn-secondary"
+            aria-label="أولوية المتابعة"
+            value={priorityOf(f)}
+            onChange={(e) => updateFollowUpDetails(f.id, { priority: e.target.value as FollowUpPriority })}
+          >
+            {(["high", "normal", "low"] as const).map((p) => (
+              <option key={p} value={p}>
+                أولوية {priorityNames[p]}
+              </option>
+            ))}
+          </select>
         )}
         {canAccessPage(effectiveUser, "clients") && f.category !== "post_sale" && f.leadId && (() => {
           const last = lastOutcome(f.leadId, bookings, notBoughtRecords);
@@ -337,6 +405,9 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
         <button aria-pressed={view === "reminders"} onClick={() => setView("reminders")}>
           تذكيرات <span style={{ opacity: 0.65, marginInlineStart: 5 }}>{tasks.length}</span>
         </button>
+        <button aria-pressed={view === "plan"} onClick={() => setView("plan")}>
+          خطة زكي اليوم
+        </button>
         <button aria-pressed={view === "suggestions"} onClick={() => setView("suggestions")}>
           اقتراحات زكي
           {aiSuggestions.filter((x) => x.status === "pending" && x.agentId === effectiveUser.id).length > 0 && (
@@ -365,14 +436,53 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
         </section>
       )}
 
+      {view === "plan" && <DailyPlan onOpenLead={onOpenLead} />}
+
       {view === "suggestions" && <SuggestionsTab onOpenLead={onOpenLead} />}
 
       {view === "followups" && (
         <section className="panel">
+          {(myReminders.length > 0 || notifState === "default") && (
+            <div className={`notice ${myUrgent ? "warning" : ""}`} role="status" style={{ margin: "0 0 12px" }}>
+              <Bell size={15} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} />
+              {myReminders.length > 0 ? (
+                <>
+                  عليك <strong>{myUrgent}</strong> متابعة محتاجة تحرّك دلوقتي (متأخرة أو ميعادها قرّب) و<strong>{myReminders.length - myUrgent}</strong> النهارده.{" "}
+                </>
+              ) : (
+                <>التذكيرات بتتحسب من مواعيد متابعاتك. </>
+              )}
+              {notifState === "granted" ? (
+                <span className="table-secondary">إشعارات المتصفح شغّالة، لكنها بتصلك طول ما التطبيق مفتوح بس.</span>
+              ) : notifState === "default" ? (
+                <button className="btn-text" onClick={enableNotifications}>
+                  فعّل إشعارات المتصفح (بتشتغل والتطبيق مفتوح بس)
+                </button>
+              ) : notifState === "denied" ? (
+                <span className="table-secondary">إشعارات المتصفح مقفولة من إعدادات المتصفح. التذكير هنا بيظهر لما تفتح الصفحة.</span>
+              ) : null}
+            </div>
+          )}
+          <div className="metric-grid" style={{ marginBottom: 16 }}>
+            {(
+              [
+                ["overdue", "متأخرة", overdueList.length],
+                ["today", "النهارده", todayList.length],
+                ["upcoming", "قادمة", upcomingList.length],
+                ["completed", "اتعملت", groups.completed.length],
+              ] as const
+            ).map(([id, label, n]) => (
+              <button key={id} type="button" className="metric" aria-pressed={bucket === id} onClick={() => setBucket(bucket === id ? "open" : id)} style={{ cursor: "pointer", background: bucket === id ? "var(--surface-soft)" : undefined }}>
+                <span className="metric-top">{label}</span>
+                <strong className="metric-value" style={id === "overdue" && n ? { color: "var(--late)" } : undefined}>{n}</strong>
+              </button>
+            ))}
+          </div>
           <FilterBar
             search={{ value: q, onChange: setQ, placeholder: "ابحث باسم العميل أو رقمه أو سبب المتابعة…" }}
             selects={[
               { id: "branch", label: "الفرع", value: fBranch, onChange: setFBranch, allLabel: "كل الفروع", primary: true, options: uniq(followUps.map((f) => f.branchId)).map((id) => ({ value: id, label: branches.find((b) => b.id === id)?.name || id })) },
+              { id: "priority", label: "الأولوية", value: fPriority, onChange: (v: string) => setFPriority(v as "all" | FollowUpPriority), allLabel: "كل الأولويات", options: (["high", "normal", "low"] as const).map((p) => ({ value: p, label: priorityNames[p] })) },
               { id: "agent", label: "الموظف", value: fAgent, onChange: setFAgent, allLabel: "كل الموظفين", primary: !worksOwnCustomers(effectiveUser), options: uniq(followUps.map((f) => f.assignedAgentId)).map((id) => ({ value: id, label: followUps.find((f) => f.assignedAgentId === id)?.assignedAgentName || id })) },
             ]}
             dates={{ from: fFrom, to: fTo, onFrom: setFFrom, onTo: setFTo, label: "موعد المتابعة" }}
@@ -380,6 +490,8 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
               setQ("");
               setFBranch("all");
               setFAgent("all");
+              setFPriority("all");
+              setBucket("open");
               setFFrom("");
               setFTo("");
             }}
@@ -410,10 +522,18 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
               <p>المتابعات المتاحة حسب صلاحياتك تظهر هنا.</p>
             </div>
           )}
-          {section("متأخرة: ابدأ بيها", overdueList, "overdue", "عدّى موعدها. كلّم العميل أو أجّل بسبب مكتوب.")}
-          {section("النهارده", todayList, "due")}
-          {section("قادمة", upcomingList, "upcoming")}
-          {finished.length > 0 && (
+          {(bucket === "open" || bucket === "overdue") && section("متأخرة: ابدأ بيها", overdueList, "overdue", "عدّى موعدها. كلّم العميل أو أجّل بسبب مكتوب.")}
+          {(bucket === "open" || bucket === "today") && section("النهارده", todayList, "due")}
+          {(bucket === "open" || bucket === "upcoming") && section("قادمة", upcomingList, "upcoming")}
+          {bucket === "completed" && (
+            <div className="followup-section">
+              <h3 className="followup-section-title">
+                اتعملت <span>{groups.completed.length}</span>
+              </h3>
+              {groups.completed.length ? groups.completed.map((f) => card(f, "done")) : <p className="table-secondary">مفيش متابعات مكتملة في الفلتر ده.</p>}
+            </div>
+          )}
+          {bucket !== "completed" && finished.length > 0 && (
             <div className="followup-section">
               <button className="btn-text" onClick={() => setShowDone(!showDone)} aria-expanded={showDone}>
                 {showDone ? "إخفاء" : "عرض"} المكتملة والملغاة ({finished.length})
@@ -422,6 +542,55 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
             </div>
           )}
         </section>
+      )}
+      {moving && (
+        <div className="dialog-backdrop">
+          <div className="panel" ref={moveRef} role="dialog" aria-modal="true" aria-labelledby="followup-move-title" style={{ width: "min(430px,100%)", padding: 27 }}>
+            <div className="page-heading">
+              <div>
+                <h2 id="followup-move-title" style={{ fontSize: 20, fontWeight: 600 }}>
+                  تأجيل المتابعة
+                </h2>
+                <p>
+                  {moving.leadName} · الموعد الحالي {moving.scheduledAt.replace("T", " ")}
+                </p>
+              </div>
+              <button className="icon-button" onClick={() => setMoving(null)} aria-label="إغلاق التأجيل">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={submitMove}>
+              <div className="field-grid">
+                <label className="field">
+                  <span>
+                    الموعد الجديد <em>مطلوب</em>
+                  </span>
+                  <input type="date" required value={moveDate} onChange={(e) => setMoveDate(e.target.value)} />
+                </label>
+                <label className="field">
+                  <span>
+                    الساعة <em className="optional-tag">اختياري</em>
+                  </span>
+                  <input type="time" value={moveTime} onChange={(e) => setMoveTime(e.target.value)} />
+                </label>
+              </div>
+              <label className="field">
+                <span>
+                  سبب التأجيل <em>مطلوب</em>
+                </span>
+                <textarea rows={2} required value={moveReason} onChange={(e) => setMoveReason(e.target.value)} placeholder="مثلاً: العميل طلب نكلمه الأسبوع الجاي." />
+              </label>
+              {moveError && (
+                <p className="notice warning" role="alert">
+                  {moveError}
+                </p>
+              )}
+              <button className="btn-primary" type="submit" style={{ marginTop: 18 }}>
+                تأكيد التأجيل
+              </button>
+            </form>
+          </div>
+        </div>
       )}
       {selected && (
         <div className="dialog-backdrop">

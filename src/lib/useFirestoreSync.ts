@@ -138,13 +138,15 @@ export function useFirestoreDocument<T extends object>(
   path: [string, string],
   value: T,
   setValue: (v: T) => void,
-  options: { canWrite?: boolean } = {}
+  options: { canWrite?: boolean; enabled?: boolean } = {}
 ) {
   const canWrite = options.canWrite ?? true;
+  const enabled = options.enabled ?? true;
   const lastRef = useRef<string>('');
   const readyRef = useRef(false);
 
   useEffect(() => {
+    if (!enabled) return;
     return onSnapshot(
       doc(db, path[0], path[1]),
       (snap) => {
@@ -161,10 +163,10 @@ export function useFirestoreDocument<T extends object>(
       (err) => handleFirestoreError(err, OperationType.GET, path.join('/'))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path[0], path[1]]);
+  }, [path[0], path[1], enabled]);
 
   useEffect(() => {
-    if (!readyRef.current || !canWrite) return;
+    if (!enabled || !readyRef.current || !canWrite) return;
     const json = JSON.stringify(value);
     if (json === lastRef.current) return;
     lastRef.current = json;

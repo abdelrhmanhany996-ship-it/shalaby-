@@ -16,6 +16,7 @@ const people = {
   agentB: { role: "sales_agent", branchId: "b1" },
   agentC: { role: "sales_agent", branchId: "b2" },
   tl: { role: "team_leader", branchId: "b1" },
+  acct: { role: "supervisor", branchId: "b1", specialty: "accounts" },
   gone: { role: "sales_agent", branchId: "b1", active: false },
 };
 const uid = (k) => `uid-${k}`;
@@ -232,4 +233,89 @@ test("the general sales manager edits people below the owner in any branch, but 
   await assertFails(updateDoc(doc(db("regional"), "users", userId("dev")), { name: "x" }));
   // and a salesperson edits no one
   await assertFails(updateDoc(doc(db("agentA"), "authProfiles", uid("agentB")), { name: "x" }));
+});
+
+// ---------- accounting: append-only books for the owner and accounts specialists ----------
+const entry = (over = {}) => ({ id: "E1", date: "2026-10-10", type: "income", amount: 100, accountId: "acc-cash", categoryId: "inc-collection", description: "تحصيل", status: "posted", createdAt: "t", createdById: userId("acct"), createdByName: "x", ...over });
+const voidOf = (e, by) => ({ ...e, status: "void", voidedAt: "t2", voidedById: userId(by), voidedByName: by, voidReason: "غلط" });
+
+test("accounting: only the owner, developer and accounts specialists read or write the books", async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "accountingEntries", "R1"), entry({ id: "R1" })));
+  for (const k of ["gm", "dev", "acct"]) await assertSucceeds(getDoc(doc(db(k), "accountingEntries", "R1")));
+  for (const k of ["regional", "sup", "bm1", "agentA", "tl"]) await assertFails(getDoc(doc(db(k), "accountingEntries", "R1")));
+  await assertFails(getDocs(collection(db("agentA"), "accountingEntries")));
+  for (const k of ["regional", "bm1", "agentA"]) await assertFails(setDoc(doc(db(k), "accountingEntries", "X" + k), entry({ id: "X" + k, createdById: userId(k) })));
+  await assertSucceeds(setDoc(doc(db("acct"), "accountingEntries", "N1"), entry({ id: "N1" })));
+  await assertSucceeds(setDoc(doc(db("gm"), "accountingEntries", "N2"), entry({ id: "N2", createdById: userId("gm") })));
+});
+
+test("accounting: an entry can be created only as posted, positive, and signed by its author", async () => {
+  await assertFails(setDoc(doc(db("acct"), "accountingEntries", "B1"), entry({ id: "B1", status: "void" })));
+  await assertFails(setDoc(doc(db("acct"), "accountingEntries", "B2"), entry({ id: "B2", amount: 0 })));
+  await assertFails(setDoc(doc(db("acct"), "accountingEntries", "B3"), entry({ id: "B3", amount: -5 })));
+  await assertFails(setDoc(doc(db("acct"), "accountingEntries", "B4"), entry({ id: "B4", type: "transfer" })));
+  await assertFails(setDoc(doc(db("acct"), "accountingEntries", "B5"), entry({ id: "B5", createdById: userId("gm") })));
+});
+
+test("accounting: entries are never edited or deleted; the only change is cancelling a posted one with a reason", async () => {
+  const e = entry({ id: "V1" });
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "accountingEntries", "V1"), e));
+  const ref = (k) => doc(db(k), "accountingEntries", "V1");
+  await assertFails(updateDoc(ref("acct"), { amount: 999 }));
+  await assertFails(updateDoc(ref("acct"), { description: "تعديل" }));
+  await assertFails(updateDoc(ref("acct"), { ...voidOf(e, "acct"), amount: 1 })); // cancel + sneak a change
+  await assertFails(updateDoc(ref("acct"), { ...voidOf(e, "acct"), voidReason: "x" })); // reason too short
+  await assertFails(updateDoc(ref("acct"), { ...voidOf(e, "gm") })); // signed as someone else
+  await assertFails(updateDoc(ref("agentA"), voidOf(e, "agentA")));
+  await assertSucceeds(updateDoc(ref("acct"), voidOf(e, "acct")));
+  // once cancelled it is final
+  await assertFails(updateDoc(ref("gm"), { status: "posted" }));
+  await assertFails(updateDoc(ref("gm"), { description: "بعد الإلغاء" }));
+  for (const k of ["dev", "gm", "acct"]) await assertFails(import("firebase/firestore").then((m) => m.deleteDoc(ref(k))));
+});
+
+test("accounting settings (accounts, opening balances) are for the same people only", async () => {
+  await assertSucceeds(setDoc(doc(db("acct"), "accountingSettings", "main"), { accounts: [], categories: [] }));
+  await assertSucceeds(getDoc(doc(db("gm"), "accountingSettings", "main")));
+  for (const k of ["regional", "bm1", "agentA", "sup"]) {
+    await assertFails(getDoc(doc(db(k), "accountingSettings", "main")));
+    await assertFails(setDoc(doc(db(k), "accountingSettings", "main"), { accounts: [] }));
+  }
+});
+
+// ---------- employee targets ----------
+const target = (user, branch = "b1", over = {}) => ({ id: `tgt-${userId(user)}-2026-10`, userId: userId(user), userName: user, branchId: branch, month: "2026-10", amount: 5000, ...over });
+
+test("targets: managers set targets in their branches, never their own, and a salesperson reads only their own", async () => {
+  await assertSucceeds(setDoc(doc(db("bm1"), "employeeTargets", "tgt-a"), target("agentA")));
+  await assertSucceeds(setDoc(doc(db("regional"), "employeeTargets", "tgt-c"), target("agentC", "b2")));
+  await assertSucceeds(setDoc(doc(db("gm"), "employeeTargets", "tgt-gm"), target("gm", "b1")));
+  await assertFails(setDoc(doc(db("bm1"), "employeeTargets", "tgt-self"), target("bm1")));
+  await assertFails(setDoc(doc(db("regional"), "employeeTargets", "tgt-rself"), target("regional")));
+  await assertFails(setDoc(doc(db("bm1"), "employeeTargets", "tgt-other-branch"), target("agentC", "b2")));
+  await assertFails(setDoc(doc(db("bm1"), "employeeTargets", "tgt-neg"), target("agentA", "b1", { amount: -1 })));
+  await assertFails(setDoc(doc(db("agentA"), "employeeTargets", "tgt-mine"), target("agentA")));
+  await assertFails(setDoc(doc(db("agentA"), "employeeTargets", "tgt-mine"), target("agentA", "b1", { amount: 1 })));
+  await assertSucceeds(getDoc(doc(db("agentA"), "employeeTargets", "tgt-a")));
+  await assertFails(getDoc(doc(db("agentB"), "employeeTargets", "tgt-a")));
+  await assertFails(getDoc(doc(db("agentA"), "employeeTargets", "tgt-c")));
+  await assertSucceeds(getDoc(doc(db("bm1"), "employeeTargets", "tgt-a")));
+  await assertFails(getDoc(doc(db("bm1"), "employeeTargets", "tgt-c")));
+  await assertSucceeds(getDocs(query(collection(db("agentA"), "employeeTargets"), where("branchId", "==", "b1"), where("userId", "==", userId("agentA")))));
+  await assertFails(getDocs(query(collection(db("agentA"), "employeeTargets"), where("branchId", "==", "b1"))));
+});
+
+test("targets: a manager cannot reassign a target to someone else or move it between branches", async () => {
+  await assertFails(updateDoc(doc(db("bm1"), "employeeTargets", "tgt-a"), { userId: userId("agentB") }));
+  await assertFails(updateDoc(doc(db("bm1"), "employeeTargets", "tgt-a"), { branchId: "b2" }));
+  await assertSucceeds(updateDoc(doc(db("bm1"), "employeeTargets", "tgt-a"), { amount: 6000 }));
+  await assertFails(updateDoc(doc(db("agentA"), "employeeTargets", "tgt-a"), { amount: 1 }));
+});
+
+test("target rules (settings/targets) are written by the owner, developer and general sales manager only", async () => {
+  await assertSucceeds(setDoc(doc(db("regional"), "settings", "targets"), { behindBelow: 70 }));
+  await assertSucceeds(setDoc(doc(db("gm"), "settings", "targets"), { behindBelow: 60 }));
+  for (const k of ["bm1", "agentA", "sup"]) await assertFails(setDoc(doc(db(k), "settings", "targets"), { behindBelow: 1 }));
+  await assertFails(setDoc(doc(db("regional"), "settings", "distribution"), { x: 1 }));
+  await assertFails(setDoc(doc(db("regional"), "settings", "license"), { x: 1 }));
 });

@@ -31,6 +31,7 @@ import { VisitsPage } from "./pages/VisitsPage";
 import { FollowUpsPage } from "./pages/FollowUpsPage";
 import { BookingsPage } from "./pages/BookingsPage";
 import { ReviewWatcher } from "./components/reviews/ReviewWatcher";
+import { FollowUpAlerts } from "./components/followups/FollowUpAlerts";
 import { LateComplaintsBanner } from "./components/reviews/LateComplaintsBanner";
 import { ZakiChat } from "./components/zaki/ZakiChat";
 import { SaveErrorToast } from "./components/common/SaveErrorToast";
@@ -49,6 +50,8 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ de
 const BrokersPage = lazy(() => import("./pages/BrokersPage").then((m) => ({ default: m.BrokersPage })));
 const OverviewPage = lazy(() => import("./pages/OverviewPage").then((m) => ({ default: m.OverviewPage })));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((m) => ({ default: m.DeveloperPage })));
+const TargetsPage = lazy(() => import("./pages/TargetsPage").then((m) => ({ default: m.TargetsPage })));
+const AccountsPage = lazy(() => import("./pages/AccountsPage").then((m) => ({ default: m.AccountsPage })));
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage").then((m) => ({ default: m.FeedbackPage })));
 
 const AppContent: React.FC = () => {
@@ -190,6 +193,10 @@ const AppContent: React.FC = () => {
 
             {activeTab === "reports" && <ReportsPage />}
 
+            {activeTab === "targets" && <TargetsPage />}
+
+            {activeTab === "accounts" && canAccessPage(effectiveUser, "accounts") && <AccountsPage />}
+
             {activeTab === "audit" && <AuditLogPage />}
 
             {activeTab === "settings" && <SettingsPage />}
@@ -219,6 +226,7 @@ const AppContent: React.FC = () => {
       />
       <SaveErrorToast />
       <ReviewWatcher />
+      <FollowUpAlerts />
       <ZakiChat />
     </div>
   );

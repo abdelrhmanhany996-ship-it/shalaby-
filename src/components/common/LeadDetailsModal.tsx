@@ -53,6 +53,8 @@ import { InterestPicker, interestNames } from "./InterestPicker";
 import { NameWithTitle } from "./NameWithTitle";
 import { ReviewCard } from "../reviews/ReviewCard";
 import { VoiceNoteField } from "./VoiceNoteField";
+import { joinSchedule, priorityNames } from "../../lib/followUps";
+import type { FollowUpPriority } from "../../types/crm";
 import { PurchaseOutcomeDialog } from "./PurchaseOutcomeDialog";
 
 export type LeadQuickAction = "edit" | "visit" | "followup" | "outcome";
@@ -110,6 +112,8 @@ export function LeadDetailsModal({
   const [note, setNote] = useState("");
   const [date, setDate] = useState(today());
   const [reason, setReason] = useState("");
+  const [followTime, setFollowTime] = useState("");
+  const [followPriority, setFollowPriority] = useState<FollowUpPriority>("normal");
   const [deptAmounts, setDeptAmounts] = useState<Record<Department, string>>({
     construction: "",
     decor: "",
@@ -173,6 +177,8 @@ export function LeadDetailsModal({
       setDate(today());
       setNote(initialAction === "edit" ? lead.notes : "");
       setReason("");
+      setFollowTime("");
+      setFollowPriority("normal");
       setDeptAmounts({ construction: "", decor: "", garden: "", general: "" });
       setAgent(
         lead.assignedAgentId ||
@@ -264,8 +270,9 @@ export function LeadDetailsModal({
         leadPhone: lead.phone,
         assignedAgentId: agent,
         branchId: lead.branchId,
-        scheduledAt: date,
+        scheduledAt: joinSchedule(date, followTime),
         reason: reason.trim(),
+        priority: followPriority,
         type: "call",
         notes: note.trim(),
       });
@@ -626,6 +633,26 @@ export function LeadDetailsModal({
                         onChange={(e) => setDate(e.target.value)}
                       />
                     </label>
+                    {action === "followup" && (
+                      <>
+                        <label className="field">
+                          <span>
+                            الساعة <em className="optional-tag">اختياري</em>
+                          </span>
+                          <input type="time" value={followTime} onChange={(e) => setFollowTime(e.target.value)} />
+                        </label>
+                        <label className="field">
+                          <span>الأولوية</span>
+                          <select value={followPriority} onChange={(e) => setFollowPriority(e.target.value as FollowUpPriority)}>
+                            {(["high", "normal", "low"] as const).map((p) => (
+                              <option key={p} value={p}>
+                                {priorityNames[p]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </>
+                    )}
                     <label className="field">
                       <span>
                         السبب <em>مطلوب</em>

@@ -6,6 +6,12 @@ export interface ScopeProfile {
   userId: string;
   branchId?: string;
   supervisedBranchIds?: string[];
+  specialty?: string;
+}
+
+/** Mirrors isAccounts() in firestore.rules: the owner, the developer, and supervisors whose specialty is accounts. */
+export function seesAccounts(p: ScopeProfile): boolean {
+  return ["admin", "general_manager"].includes(p.role) || (p.role === "supervisor" && p.specialty === "accounts");
 }
 
 const SALES = ["sales_agent", "team_leader"];
@@ -42,12 +48,14 @@ export function rowScope(p: ScopeProfile, ownerField: string, extra: ScopeFilter
 export function scopesFor(p: ScopeProfile | null) {
   if (!p) {
     const none: Scope = "none";
-    return { leads: none, followUps: none, visits: none, bookings: none, invoices: none, notBought: none, reminderDone: none, aiSuggestions: none, reviews: none, reviewNotes: none, timeline: none, brokers: none, users: none, notifications: none, audit: none };
+    return { employeeTargets: none, accounting: none, leads: none, followUps: none, visits: none, bookings: none, invoices: none, notBought: none, reminderDone: none, aiSuggestions: none, reviews: none, reviewNotes: none, timeline: none, brokers: none, users: none, notifications: none, audit: none };
   }
   const all = seesAll(p);
   const branches = scopeBranches(p);
   const sales = isSales(p);
   return {
+    employeeTargets: rowScope(p, "userId"),
+    accounting: (seesAccounts(p) ? "all" : "none") as Scope,
     leads: rowScope(p, "assignedAgentId", [[["delegatedTo", "array-contains", p.userId]]]),
     followUps: rowScope(p, "assignedAgentId"),
     visits: rowScope(p, "receivedByAgentId"),

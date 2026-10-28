@@ -92,3 +92,45 @@ test("reviews tool lists late complaints with their stats", () => {
   assert.equal(r.stats.complaints.late, 1);
   assert.equal(call("reviews", {}, data({ reviewRequests, reviewNotes: [] })).total, 2);
 });
+
+// ---- targets and accounting tools ----
+import { targetsTool, accountingTool, zakiToolsFor } from "../src/lib/zakiGuide";
+import { defaultTargetSettings } from "../src/lib/targets";
+import { defaultAccountingSettings } from "../src/lib/accounting";
+import type { AccountEntry, EmployeeTarget } from "../src/types/crm";
+
+test("targets and accounting tools are offered only with the matching access", () => {
+  const names = (a: { targets: boolean; accounts: boolean }) => zakiToolsFor(a).map((t) => t.name);
+  assert.ok(!names({ targets: false, accounts: false }).some((n) => n === "employee_targets" || n === "accounting"));
+  assert.ok(names({ targets: true, accounts: false }).includes("employee_targets") && !names({ targets: true, accounts: false }).includes("accounting"));
+  assert.ok(names({ targets: true, accounts: true }).includes("accounting"));
+  assert.equal(targetsTool.name, "employee_targets");
+  assert.equal(accountingTool.name, "accounting");
+});
+
+test("accounting is refused when the data was not handed over, and answered from real entries when it was", () => {
+  const base = { today: "2026-10-20", leads: [], bookings: [], followUps: [], visits: [], notBoughtRecords: [], brokers: [], users: [], branches: [] } as ToolData;
+  assert.ok(String((runTool("accounting", {}, base) as { error: string }).error).includes("مش متاحة"));
+  const entries = [
+    { id: "e1", date: "2026-10-10", type: "income", amount: 1000, accountId: "acc-cash", categoryId: "inc-collection", description: "تحصيل", status: "posted", createdAt: "t", createdById: "a", createdByName: "a" },
+    { id: "e2", date: "2026-10-11", type: "expense", amount: 400, accountId: "acc-cash", categoryId: "exp-rent", description: "إيجار", status: "posted", createdAt: "t", createdById: "a", createdByName: "a" },
+    { id: "e3", date: "2026-10-12", type: "expense", amount: 99999, accountId: "acc-cash", categoryId: "exp-rent", description: "غلط", status: "void", createdAt: "t", createdById: "a", createdByName: "a" },
+  ] as AccountEntry[];
+  const r = runTool("accounting", {}, { ...base, accounting: { entries, settings: defaultAccountingSettings } }) as { incomeEGP: number; expenseEGP: number; netEGP: number; totalBalanceEGP: number };
+  assert.deepEqual([r.incomeEGP, r.expenseEGP, r.netEGP, r.totalBalanceEGP], [1000, 400, 600, 600]);
+});
+
+test("employee_targets reports each person's own numbers and never invents a target", () => {
+  const users = [{ id: "u1", name: "سالي", role: "sales_agent", active: true, branchId: "b1" }, { id: "u2", name: "عمر", role: "sales_agent", active: true, branchId: "b1" }] as ToolData["users"];
+  const bookings = [{ id: "b1", agentId: "u1", bookingStatus: "confirmed", bookingDate: "2026-10-05", amount: 3000, department: "decor", leadId: "l" }] as ToolData["bookings"];
+  const targets = [{ id: "t1", userId: "u1", month: "2026-10", amount: 10000 }] as EmployeeTarget[];
+  const d = { today: "2026-10-20", leads: [], bookings, followUps: [], visits: [], notBoughtRecords: [], brokers: [], users, branches: [{ id: "b1", name: "القاهرة" }], employeeTargets: targets, targetSettings: defaultTargetSettings } as unknown as ToolData;
+  const r = runTool("employee_targets", { month: "2026-10" }, d) as { rows: { employee: string; targetEGP: number; achievedEGP: number; percent: number; state: string }[]; overall: { target: number } };
+  const sally = r.rows.find((x) => x.employee === "سالي")!;
+  assert.deepEqual([sally.targetEGP, sally.achievedEGP, sally.percent], [10000, 3000, 30]);
+  assert.equal(r.rows.find((x) => x.employee === "عمر")!.state, "بدون هدف");
+  assert.equal(r.overall.target, 10000);
+  const behind = runTool("employee_targets", { month: "2026-10", only: "behind" }, d) as { rows: unknown[] };
+  assert.equal(behind.rows.length, 1);
+  assert.ok(String((runTool("employee_targets", {}, { ...d, targetSettings: undefined }) as { error: string }).error).length > 0);
+});

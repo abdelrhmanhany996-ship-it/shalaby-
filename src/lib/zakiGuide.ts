@@ -29,6 +29,30 @@ export const zakiTools = [
   { name: "performance", description: "مقارنة أداء الفروع أو الموظفين: العملاء والمشترين وإجمالي المشتريات والمتابعات المتأخرة والمكتملة.", parameters: obj({ group_by: { type: S, description: "branch (الافتراضي) أو agent" }, from, to, limit }) },
 ];
 
+const month = { type: S, description: "الشهر YYYY-MM (الافتراضي الشهر الحالي)" };
+
+/** Only offered to people who may see targets (their own are always visible to them through the same tool). */
+export const targetsTool = {
+  name: "employee_targets",
+  description: "أهداف الموظفين الشهرية والإنجاز الفعلي: الهدف، المُنجَز، النسبة، المتبقي، النسبة المفروض يوصلها لحد النهارده، والحالة (حقّق/ماشي كويس/متأخر/ما حققش)، وعدد المتابعات المتأخرة عند كل موظف. للموظف العادي بترجع هدفه هو بس.",
+  parameters: obj({ month, agent, branch, only: { type: S, description: "behind لعرض المتأخرين عن الهدف بس" }, limit }),
+};
+
+/** Only offered to people who may see the books. */
+export const accountingTool = {
+  name: "accounting",
+  description: "الحسابات: إجمالي الإيرادات والمصروفات والصافي لفترة، وأرصدة الحسابات، وتوزيع الحركات على التصنيفات والمسؤولين. أرقام مسجّلة في دفتر الحسابات بس، وده مش نفس مشتريات العملاء.",
+  parameters: obj({ from, to, type: { type: S, description: "income أو expense (اختياري)" }, category: { type: S, description: "اسم تصنيف أو جزء منه (اختياري)" }, limit }),
+};
+
+/** The tool list for one user: the general tools, plus the ones their permissions open. */
+export const zakiToolsFor = (access: { targets: boolean; accounts: boolean }) => [
+  ...zakiTools,
+  // Every salesperson may ask about their own target; managers get the team's.
+  ...(access.targets ? [targetsTool] : []),
+  ...(access.accounts ? [accountingTool] : []),
+];
+
 /** What Zaki "studied" about the system: the parts, the vocabulary and how to look things up. */
 export const zakiGuide = `
 خريطة النظام (اللي مذاكره زكي):
@@ -42,6 +66,8 @@ export const zakiGuide = `
 طريقة الشغل:
 - مش معاك بيانات جاهزة. لما تحتاج رقم أو اسم، استدعِ الأداة المناسبة (ممكن أكتر من أداة، ممكن تعيد بمعطيات مختلفة)، وبعد ما تاخد النتيجة جاوب. متسأل المستخدم عن حاجة تقدر تجيبها بنفسك.
 - اختار أضيق أداة تجاوب: رقم عام ← overview/period_stats، ترتيب ← top_customers/top_brokers، شخص ← get_customer/get_broker، قوائم ← find_customers/list_followups/list_purchases، أسباب ← not_bought، رضا ← feedback، تقييم الموظفين ← employee_ratings، ترشيحات ← referrals، تقييمات اللينك والشكاوى ← reviews، مقارنة ← performance.
+- الأهداف: كل موظف له هدف شهري بالجنيه، والإنجاز بيتحسب من المشتريات المسجّلة له في الشهر. employee_targets بترجع النسبة والمتبقي والنسبة المفروض يوصلها لحد النهارده.
+- لما تحلل أداء موظف: اربط الأرقام ببعض (الهدف، الإنجاز، المتابعات المتأخرة، المتابعات اللي اتأجلت كتير). اذكر السبب المحتمل بصيغة «ممكن» وقل إنه تفسير مش حقيقة، ولا تفسر لو البيانات ما تدعمش. وأي توصية لازم تتحط معاها الدليل من الأدوات.
 - لو الأداة رجّعت truncated=true قول إن فيه أكتر من اللي اتعرض.
 - لو الأداة رجّعت ambiguous اسأل المستخدم يحدد مين المقصود.
 - للمقارنات الزمنية (الأسبوع ده مقابل اللي قبله) استدعِ period_stats لكل فترة بتواريخها.

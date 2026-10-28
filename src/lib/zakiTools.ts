@@ -1,4 +1,7 @@
-import type { Booking, Branch, BrokerEntity, Department, FollowUp, Lead, NotBoughtRecord, ReviewNote, ReviewRequest, User, Visit } from "../types/crm";
+import type { AccountEntry, AccountingSettings, Booking, Branch, BrokerEntity, Department, EmployeeTarget, FollowUp, Lead, NotBoughtRecord, ReviewNote, ReviewRequest, TargetSettings, User, Visit } from "../types/crm";
+import { balances, filterEntries, summarize } from "./accounting";
+import { overview as targetsOverview, monthOf as targetMonth, isMonth, targetStateNames } from "./targets";
+import { bucketOf, priorityNames, priorityOf } from "./followUps";
 import { addToDate } from "./postSale";
 import { bookingSplit, departmentIds } from "./purchases";
 import { brokerRows, customerRows, feedbackSummary } from "./overview";
@@ -22,6 +25,13 @@ export interface ToolData {
   branches: Branch[];
   reviewRequests?: ReviewRequest[];
   reviewNotes?: ReviewNote[];
+  /** Targets: a manager's scope, or only the person's own row. */
+  employeeTargets?: EmployeeTarget[];
+  targetSettings?: TargetSettings;
+  /** The people a target can be about, when it is wider than `users` (a branch manager's own salespeople). */
+  targetUsers?: User[];
+  /** Present only for people who may see the books. */
+  accounting?: { entries: AccountEntry[]; settings: AccountingSettings };
 }
 
 type Args = Record<string, unknown>;
@@ -239,6 +249,10 @@ export function runTool(name: string, a: Args, d: ToolData): unknown {
           daysOverdue: followUpStatus(f) === "overdue" ? Math.round((Date.parse(d.today) - Date.parse(f.scheduledAt.slice(0, 10))) / 86_400_000) : 0,
           kind: f.category === "post_sale" ? "بعد البيع" : "بيع",
           reason: f.reason.slice(0, 120),
+          priority: priorityNames[priorityOf(f)],
+          time: /T(\d{2}:\d{2})/.exec(f.scheduledAt)?.[1] ?? null,
+          movedTimes: f.rescheduleCount ?? 0,
+          lastMoveReason: f.rescheduleLog?.length ? f.rescheduleLog[f.rescheduleLog.length - 1].reason.slice(0, 100) : null,
         }))
         .sort((x, y) => y.daysOverdue - x.daysOverdue || x.due.localeCompare(y.due));
       return page(rows, limitOf(a));
@@ -391,6 +405,66 @@ export function runTool(name: string, a: Args, d: ToolData): unknown {
       };
     }
 
+    case "employee_targets": {
+      if (!d.targetSettings) return { error: "الأهداف مش متاحة." };
+      const month = typeof a.month === "string" && isMonth(a.month) ? a.month : targetMonth(d.today);
+      const bids = branchIdsFor(a.branch);
+      const aids = agentIdsFor(a.agent);
+      const o = targetsOverview(d.targetUsers ?? d.users, d.employeeTargets ?? [], d.bookings, month, d.today, d.targetSettings);
+      const rows = o.rows
+        .filter((r) => (!bids || (r.user.branchId && bids.includes(r.user.branchId))) && (!aids || aids.includes(r.user.id)))
+        .filter((r) => str(a.only) !== "behind" || r.state === "behind" || r.state === "missed")
+        .map((r) => {
+          const mine = d.followUps.filter((f) => f.assignedAgentId === r.user.id && !["completed", "cancelled"].includes(f.status));
+          return {
+            employee: r.user.name,
+            branch: r.user.branchId ? branchName(r.user.branchId) : null,
+            targetEGP: r.target,
+            achievedEGP: r.achieved,
+            percent: r.percent,
+            remainingEGP: r.remaining,
+            expectedPercentByToday: r.expectedPercent,
+            state: targetStateNames[r.state],
+            purchases: r.purchases,
+            overdueFollowUps: mine.filter((f) => bucketOf(f, d.today) === "overdue").length,
+            openFollowUps: mine.length,
+          };
+        });
+      return {
+        month,
+        note: "الإنجاز = قيمة المشتريات المسجّلة للموظف في الشهر من غير الملغي والمسترجع. expectedPercentByToday = النسبة المفروض يوصلها حسب أيام الشهر اللي عدّت.",
+        overall: o.total,
+        purchasesBySomeoneNotListedEGP: o.otherAchieved,
+        ...page(rows, limitOf(a)),
+      };
+    }
+
+    case "accounting": {
+      if (!d.accounting) return { error: "الحسابات مش متاحة لصلاحياتك." };
+      const cat = str(a.category);
+      const settings = d.accounting.settings;
+      const catIds = cat ? settings.categories.filter((c) => has(c.name, cat)).map((c) => c.id) : undefined;
+      let list = filterEntries(d.accounting.entries, { from, to, type: a.type === "income" || a.type === "expense" ? a.type : "all" });
+      if (catIds) list = list.filter((e) => catIds.includes(e.categoryId));
+      const s = summarize(list);
+      const bal = balances(settings, d.accounting.entries, d.today);
+      const catName = (id: string) => settings.categories.find((c) => c.id === id)?.name ?? id;
+      return {
+        from: from ?? null,
+        to: to ?? null,
+        incomeEGP: s.income,
+        expenseEGP: s.expense,
+        netEGP: s.net,
+        entries: s.count,
+        byCategory: s.byCategory.map((c) => ({ category: catName(c.categoryId), type: c.type === "income" ? "إيراد" : "مصروف", totalEGP: c.total, count: c.count })),
+        byEmployee: s.byEmployee.map((p) => ({ employee: p.name, incomeEGP: p.income, expenseEGP: p.expense })),
+        accountBalancesTodayEGP: bal.rows.map((r) => ({ account: r.account.name, balanceEGP: r.balance })),
+        totalBalanceEGP: bal.total,
+        note: "دي حركات مسجّلة في دفتر الحسابات بس، مش مشتريات العملاء.",
+        recent: page(list.slice(0, limitOf(a)).map((e) => ({ date: e.date, type: e.type === "income" ? "إيراد" : "مصروف", amountEGP: e.amount, category: catName(e.categoryId), description: e.description.slice(0, 100) })), limitOf(a)),
+      };
+    }
+
     default:
       return { error: `أداة غير معروفة: ${name}` };
   }
@@ -412,6 +486,8 @@ export const toolLabels: Record<string, string> = {
   reviews: "بقرا التقييمات والشكاوى",
   employee_ratings: "بشوف تقييم الموظفين",
   referrals: "بشوف الترشيحات",
+  employee_targets: "بقارن الأهداف بالإنجاز",
+  accounting: "بقلّب في الحسابات",
 };
 
 export const defaultToolDate = (daysAgo: number, today: string) => addToDate(today, { days: -daysAgo });

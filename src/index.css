@@ -2603,3 +2603,6 @@
 .suggestion-history ul { margin: 8px 0 0; padding-inline-start: 18px; display: grid; gap: 4px; }
 .suggestion-card summary { font-size: 13px; cursor: pointer; color: var(--muted); margin-top: 6px; }
 .followup-actions { align-items: center; flex-wrap: wrap; }
+
+.btn-secondary .spin { animation: voice-spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .btn-secondary .spin { animation: none; } }

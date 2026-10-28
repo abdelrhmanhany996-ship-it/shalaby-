@@ -172,6 +172,10 @@ export const canCompleteFollowUp = (u: User, f: FollowUp) =>
   has(u, "followups.complete") &&
   f.assignedAgentId === u.id &&
   !["completed", "cancelled"].includes(f.status);
+/** Moving a follow-up or changing its priority: its owner, or a manager who may schedule follow-ups. Closed ones are final. */
+export const canManageFollowUp = (u: User, f: FollowUp) =>
+  !["completed", "cancelled"].includes(f.status) &&
+  ((has(u, "followups.complete") && f.assignedAgentId === u.id) || (has(u, "followups.create") && !isSales(u)));
 /** Who a person may ADD: the developer everyone, the owner the sales side, a branch manager their own salespeople. */
 export const assignableRoles = (u: User): UserRole[] =>
   !canManageStaff(u)
@@ -210,7 +214,10 @@ export function canAccessPage(u: User, page: string) {
   // The top-customers board compares people and branches: it is for management, not for each salesperson.
   if (page === "overview")
     return !isSales(u) && has(u, "bookings.view") && has(u, "customers.view");
+  // Everyone who sells sees their own target; managers see the team's.
+  if (page === "targets") return has(u, "targets.view") || isSalesCapable(u);
   const key: Record<string, Parameters<typeof has>[1]> = {
+    accounts: "accounts.view",
     clients: "customers.view",
     feedback: "customers.view",
     add_client: "customers.create",

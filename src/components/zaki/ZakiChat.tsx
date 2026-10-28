@@ -3,7 +3,8 @@ import { Send, X } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { aiStatus, runZaki, type ChatTurn } from "../../lib/aiClient";
 import { runTool, toolLabels, type ToolData } from "../../lib/zakiTools";
-import { zakiGuide, zakiTools } from "../../lib/zakiGuide";
+import { zakiGuide, zakiToolsFor } from "../../lib/zakiGuide";
+import { hasPermission, isSalesCapable } from "../../lib/permissions";
 import { today } from "../../lib/presentation";
 import { VoiceNoteField } from "../common/VoiceNoteField";
 import { ZakiAvatar, type ZakiMood } from "./ZakiAvatar";
@@ -117,10 +118,16 @@ function Rich({ text }: { text: string }) {
 
 /** Zaki: a floating assistant that answers questions about the data the user can see. */
 export function ZakiChat() {
-  const { currentUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes } = useCRM();
+  const { currentUser, effectiveUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes, employeeTargets, targetSettings, accountEntries, accountingSettings, targetUsers } = useCRM();
+  const canTargets = hasPermission(effectiveUser, "targets.view") || isSalesCapable(effectiveUser);
+  const canAccounts = hasPermission(effectiveUser, "accounts.view");
   // Always the latest data: the ref is refreshed on every render, and Firestore keeps the state live.
   const dataRef = useRef<ToolData | null>(null);
-  dataRef.current = { today: today(), leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes };
+  dataRef.current = {
+    today: today(), leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes,
+    ...(canTargets ? { employeeTargets, targetSettings, targetUsers } : {}),
+    ...(canAccounts ? { accounting: { entries: accountEntries, settings: accountingSettings } } : {}),
+  };
   const [steps, setSteps] = useState<string[]>([]);
   const [available, setAvailable] = useState(false);
   const [open, setOpen] = useState(false);
@@ -206,7 +213,7 @@ export function ZakiChat() {
       const { answer, used } = await runZaki({
         question: q,
         history,
-        tools: zakiTools,
+        tools: zakiToolsFor({ targets: canTargets, accounts: canAccounts }),
         guide: zakiGuide,
         today: today(),
         viewer: currentUser.name,

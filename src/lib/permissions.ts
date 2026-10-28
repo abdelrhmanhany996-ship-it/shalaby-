@@ -55,6 +55,10 @@ export const permissionDefinitions = [
   ["brokers.view", "عرض الوسطاء"],
   ["catalog.manage", "إدارة تصنيفات الفواتير والوسطاء"],
   ["audit.view", "عرض سجل العمليات"],
+  ["targets.view", "عرض أهداف الموظفين ومتابعة إنجازها"],
+  ["targets.manage", "تحديد أهداف الموظفين وقواعد حساب الإنجاز"],
+  ["accounts.view", "عرض الحسابات والحركات المالية"],
+  ["accounts.manage", "تسجيل الحركات المالية وإلغاؤها"],
 ] as const;
 export type Permission = (typeof permissionDefinitions)[number][0];
 export type PermissionProfile =
@@ -110,6 +114,10 @@ export const defaultPermissionMatrix: PermissionMatrix = {
     "organization.manage",
     "catalog.manage",
     "audit.view",
+    "targets.view",
+    "targets.manage",
+    "accounts.view",
+    "accounts.manage",
   ],
   // Also sells: registers customers, follows up and records purchases, besides seeing every branch.
   general: [
@@ -123,6 +131,8 @@ export const defaultPermissionMatrix: PermissionMatrix = {
     "invoices.manage",
     "customers.assign",
     "staff.manage",
+    "targets.view",
+    "targets.manage",
   ],
   specialist_sales: [
     "customers.view",
@@ -135,8 +145,11 @@ export const defaultPermissionMatrix: PermissionMatrix = {
     "reports.view",
     "staff.view",
     "teams.view",
+    "targets.view",
   ],
   specialist_accounts: [
+    "accounts.view",
+    "accounts.manage",
     "invoices.view",
     "invoices.manage",
     "bookings.view",
@@ -154,7 +167,7 @@ export const defaultPermissionMatrix: PermissionMatrix = {
   ],
   // The branch sales manager is the branch's salesperson: customers, visits, follow-ups, purchases, reviews.
   // Staff and structure screens come back when salespeople are added under them.
-  branch: [...daily, "brokers.view"],
+  branch: [...daily, "brokers.view", "targets.view", "targets.manage"],
   employee: daily,
 };
 export const normalizeUser = (user: User): User => ({
@@ -237,6 +250,8 @@ export const permissionDependencies: Partial<Record<Permission, Permission[]>> =
     "teams.manage": ["teams.view", "staff.view"],
     "organization.manage": ["branches.view"],
     "catalog.manage": ["invoices.view", "brokers.view"],
+    "targets.manage": ["targets.view"],
+    "accounts.manage": ["accounts.view"],
   };
 export function togglePermission(
   permissions: Permission[],

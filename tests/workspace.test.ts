@@ -503,3 +503,100 @@ test("a salesperson decides only their own pending Zaki suggestions, and accepti
   assert.throws(() => fixture(employee, { ...withLead, aiSuggestions: [sug({ status: "accepted" })] }).view.decideSuggestion("s1", { accept: false }));
   assert.throws(() => fixture(employee, withLead).view.saveSuggestions([sug({ agentId: "someone-else" })] as never));
 });
+
+// ---------- follow-up changes, employee targets and accounting ----------
+const spy = (names: string[]) => {
+  const calls: string[] = [];
+  return { calls, fns: Object.fromEntries(names.map((n) => [n, (...a: unknown[]) => (calls.push(n), a[0])])) as Partial<CRMContextType> };
+};
+const ownTask = (over = {}) => ({
+  ...seed.initialFollowUps[0],
+  id: "mine",
+  assignedAgentId: employee.id,
+  branchId: employee.branchId!,
+  leadId: seed.initialLeads.find((l) => l.assignedAgentId === employee.id)?.id ?? seed.initialLeads[0].id,
+  status: "due" as const,
+  ...over,
+});
+
+test("rescheduling and priority: the owner and branch managers may, others and closed tasks may not", () => {
+  const mine = ownTask();
+  const { fns, calls } = spy(["rescheduleFollowUp", "updateFollowUpDetails"]);
+  const a = fixture(employee, { followUps: [mine], ...fns });
+  a.view.rescheduleFollowUp("mine", "2026-12-01", "سبب");
+  a.view.updateFollowUpDetails("mine", { priority: "high" });
+  assert.deepEqual(calls, ["rescheduleFollowUp", "updateFollowUpDetails"]);
+
+  const s1 = spy(["rescheduleFollowUp"]);
+  const colleague = fixture(makeUser("sales_agent", { id: "colleague", branchId: employee.branchId }), { followUps: [mine], ...s1.fns });
+  assert.throws(() => colleague.view.rescheduleFollowUp("mine", "2026-12-01", "x"));
+  const s2 = spy(["rescheduleFollowUp"]);
+  const closed = fixture(employee, { followUps: [ownTask({ status: "completed" })], ...s2.fns });
+  assert.throws(() => closed.view.rescheduleFollowUp("mine", "2026-12-01", "x"));
+  assert.deepEqual([s1.calls, s2.calls], [[], []]);
+});
+
+test("targets: managers set them inside their branch, never their own, a salesperson only reads their own", () => {
+  const rows = [
+    { id: "t-emp", userId: employee.id, userName: "e", branchId: employee.branchId, month: "2026-10", amount: 100 },
+    { id: "t-other", userId: other.id, userName: "o", branchId: other.branchId, month: "2026-10", amount: 100 },
+  ] as CRMContextType["employeeTargets"];
+  const mk = (actor: User) => {
+    const s = spy(["setEmployeeTarget", "removeEmployeeTarget", "updateTargetSettings"]);
+    return { ...fixture(actor, { employeeTargets: rows, ...s.fns }), calls: s.calls };
+  };
+  const bm = mk(manager);
+  bm.view.setEmployeeTarget(employee.id, "2026-10", 5000);
+  assert.deepEqual(bm.calls, ["setEmployeeTarget"]);
+  assert.throws(() => bm.view.setEmployeeTarget(other.id, "2026-10", 5000), "another branch");
+  assert.throws(() => bm.view.setEmployeeTarget(manager.id, "2026-10", 5000), "their own");
+  assert.throws(() => bm.view.updateTargetSettings({ behindBelow: 10 }), "only the general manager and above set the rules");
+  assert.equal(bm.view.employeeTargets.every((t) => t.userId === employee.id || bm.view.users.some((u) => u.id === t.userId)), true);
+  assert.ok(!bm.view.employeeTargets.some((t) => t.id === "t-other"));
+
+  const emp = mk(employee);
+  assert.throws(() => emp.view.setEmployeeTarget(employee.id, "2026-10", 999999));
+  assert.deepEqual(emp.view.employeeTargets.map((t) => t.id), ["t-emp"]);
+  assert.equal(canAccessPage(emp.view.effectiveUser, "targets"), true); // their own target
+  assert.deepEqual(emp.calls, []);
+
+  const owner = mk(director);
+  owner.view.setEmployeeTarget(employee.id, "2026-10", 1);
+  assert.throws(() => owner.view.setEmployeeTarget(director.id, "2026-10", 1), "the owner does not sell, so has no target");
+  owner.view.updateTargetSettings({ behindBelow: 50 });
+  assert.deepEqual(owner.calls, ["setEmployeeTarget", "updateTargetSettings"]);
+  // a salesperson is not a valid target subject unless they sell
+  assert.throws(() => owner.view.setEmployeeTarget("nobody", "2026-10", 1));
+});
+
+test("accounting: only the owner/developer and accounts specialists see or change the books", () => {
+  const entries = [{ id: "e1", date: "2026-10-10", type: "income", amount: 100, accountId: "a", categoryId: "c", description: "x", status: "posted", createdAt: "t", createdById: "u", createdByName: "u" }] as CRMContextType["accountEntries"];
+  const mk = (actor: User) => {
+    const s = spy(["addAccountEntry", "voidAccountEntry", "correctAccountEntry", "updateAccountingSettings"]);
+    return { ...fixture(actor, { accountEntries: entries, ...s.fns }), calls: s.calls };
+  };
+  const accountant = mk(makeUser("supervisor", { id: "acct", specialty: "accounts", branchId: employee.branchId }));
+  assert.equal(accountant.view.accountEntries.length, 1);
+  accountant.view.addAccountEntry({} as never);
+  accountant.view.voidAccountEntry("e1", "غلط");
+  accountant.view.correctAccountEntry("e1", {} as never, "غلط");
+  accountant.view.updateAccountingSettings({ accounts: [], categories: [] });
+  assert.deepEqual(accountant.calls, ["addAccountEntry", "voidAccountEntry", "correctAccountEntry", "updateAccountingSettings"]);
+  assert.equal(canAccessPage(accountant.view.effectiveUser, "accounts"), true);
+
+  const owner = mk(director);
+  assert.equal(owner.view.accountEntries.length, 1);
+  owner.view.addAccountEntry({} as never);
+  assert.deepEqual(owner.calls, ["addAccountEntry"]);
+
+  for (const actor of [employee, manager, makeUser("supervisor", { id: "salesup", specialty: "sales", branchId: employee.branchId }), makeUser("regional_manager", { id: "gsm" })]) {
+    const w = mk(actor);
+    assert.deepEqual(w.view.accountEntries, [], `${actor.role} sees no entries`);
+    assert.equal(canAccessPage(w.view.effectiveUser, "accounts"), false);
+    assert.throws(() => w.view.addAccountEntry({} as never));
+    assert.throws(() => w.view.voidAccountEntry("e1", "x"));
+    assert.throws(() => w.view.correctAccountEntry("e1", {} as never, "x"));
+    assert.throws(() => w.view.updateAccountingSettings({ accounts: [], categories: [] }));
+    assert.deepEqual(w.calls, []);
+  }
+});

@@ -324,6 +324,22 @@ export interface FollowUp {
   suggestionId?: string;
   /** The broker it is about, when it is not for a customer. */
   brokerId?: string;
+  /** How urgent it is. Missing means "normal" (every follow-up made before this field existed). */
+  priority?: FollowUpPriority;
+  /** How many times the date was moved, with each move kept so nothing is lost. */
+  rescheduleCount?: number;
+  rescheduleLog?: FollowUpReschedule[];
+}
+
+export type FollowUpPriority = "high" | "normal" | "low";
+
+export interface FollowUpReschedule {
+  at: string;
+  from: string;
+  to: string;
+  byId: string;
+  byName: string;
+  reason: string;
 }
 
 export type BookingStatus =
@@ -628,4 +644,92 @@ export interface AiSuggestion {
   finalReason?: string;
   edited?: boolean;
   followUpId?: string;
+}
+
+/** A monthly sales target for one employee. One row per employee per month (the id says so), so a target can never be doubled. */
+export interface EmployeeTarget {
+  isDemo?: boolean;
+  /** `tgt-<userId>-<YYYY-MM>` */
+  id: string;
+  userId: string;
+  userName: string;
+  /** The employee's branch when the target was set: the security rules scope rows by it. */
+  branchId: string;
+  /** YYYY-MM */
+  month: string;
+  /** Target in EGP. */
+  amount: number;
+  note?: string;
+  setById: string;
+  setByName: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Every change to the amount, newest last. */
+  history?: { at: string; byId: string; byName: string; from: number; to: number }[];
+}
+
+/** How achievement is judged. Stored in settings/targets and editable by whoever may manage targets. */
+export interface TargetSettings {
+  /** Percent of the target: below "behind" is behind, from "onTrack" is on track, from "achieved" is achieved. */
+  behindBelow: number;
+  achievedFrom: number;
+  /** Departments whose purchases count toward a target. Empty means all of them. */
+  departments: Department[];
+  /** Used for an employee that has no row for the month (0 = no default, they simply have no target). */
+  defaultAmount: number;
+  /** Compare against the share of the month already passed instead of the whole target. */
+  paceAware: boolean;
+}
+
+export type AccountEntryType = "income" | "expense";
+export type AccountEntryStatus = "posted" | "void";
+
+/**
+ * One financial transaction. Entries are never edited or deleted: a mistake is voided (kept, with who and why)
+ * and the corrected entry points back to it through `replacesId`, so every balance can be traced.
+ */
+export interface AccountEntry {
+  isDemo?: boolean;
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  type: AccountEntryType;
+  /** Always positive; the type gives it its sign. */
+  amount: number;
+  accountId: string;
+  categoryId: string;
+  description: string;
+  /** The employee responsible (who collected it, who spent it), when it applies. */
+  employeeId?: string;
+  employeeName?: string;
+  branchId?: string;
+  /** A purchase (booking) this receipt is for, kept only as a reference. */
+  bookingId?: string;
+  reference?: string;
+  status: AccountEntryStatus;
+  replacesId?: string;
+  createdAt: string;
+  createdById: string;
+  createdByName: string;
+  voidedAt?: string;
+  voidedById?: string;
+  voidedByName?: string;
+  voidReason?: string;
+}
+
+export interface AccountDef {
+  id: string;
+  name: string;
+  openingBalance: number;
+  active: boolean;
+}
+export interface AccountCategoryDef {
+  id: string;
+  name: string;
+  type: AccountEntryType;
+  active: boolean;
+}
+export interface AccountingSettings {
+  accounts: AccountDef[];
+  categories: AccountCategoryDef[];
 }
