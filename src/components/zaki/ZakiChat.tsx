@@ -245,7 +245,7 @@ export function ZakiChat() {
         <div className="zaki-fab-wrap">
           {greet && (
             <div className="zaki-bubble" role="status">
-              أهلًا {first}! أنا زكي، اسألني عن أي حاجة في النظام 👋
+              أهلًا {first}! أنا شلبي، اسألني عن أي حاجة في النظام 👋
             </div>
           )}
           <button
@@ -256,19 +256,19 @@ export function ZakiChat() {
               setOpen(true);
               window.setTimeout(() => setMood("idle"), 1800);
             }}
-            aria-label="افتح زكي، المساعد الذكي"
+            aria-label="افتح شلبي، المساعد الذكي"
           >
             <ZakiAvatar mood={mood} size={96} />
-            <span className="zaki-fab-label">زكي</span>
+            <span className="zaki-fab-label">شلبي</span>
           </button>
         </div>
       )}
       {open && (
-        <div className="zaki-panel" role="dialog" aria-label="زكي، المساعد الذكي">
+        <div className="zaki-panel" role="dialog" aria-label="شلبي، المساعد الذكي">
           <div className="zaki-head">
             <ZakiAvatar mood={busy ? (slow ? "watch" : "thinking") : mood} size={168} className="zaki-head-art" />
             <div>
-              <strong>زكي</strong>
+              <strong>شلبي</strong>
               <small><i className="zaki-online" />متاح · بيجاوب من بيانات نظامك</small>
             </div>
             <button className="icon-button" onClick={() => setOpen(false)} aria-label="إغلاق">

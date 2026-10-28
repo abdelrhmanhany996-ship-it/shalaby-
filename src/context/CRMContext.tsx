@@ -674,7 +674,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     const who = { decidedAt: at, decidedById: effectiveUser.id, decidedByName: effectiveUser.name };
     if (!decision.accept) {
       setAiSuggestions((prev) => prev.map((x) => (x.id === id ? { ...x, ...who, status: "rejected", rejectReason: decision.reason } : x)));
-      logAudit("رفض اقتراح زكي", "اقتراح", id, `${s.name}: ${decision.reason || "من غير سبب"}`);
+      logAudit("رفض اقتراح شلبي", "اقتراح", id, `${s.name}: ${decision.reason || "من غير سبب"}`);
       return;
     }
     const lead = s.leadId ? leads.find((l) => l.id === s.leadId) : undefined;
@@ -689,7 +689,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
       scheduledAt: decision.date,
       reason: decision.reason,
       type: decision.type,
-      notes: s.evidence ? `اقتراح زكي: ${s.evidence}` : "",
+      notes: s.evidence ? `اقتراح شلبي: ${s.evidence}` : "",
       origin: "zaki",
       suggestionId: s.id,
     });
@@ -700,10 +700,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
         authorId: effectiveUser.id,
         authorName: effectiveUser.name,
         type: "followup_created",
-        title: `زكي اقترح متابعة، و${effectiveUser.name} وافق وجدولها يوم ${decision.date}`,
+        title: `شلبي اقترح متابعة، و${effectiveUser.name} وافق وجدولها يوم ${decision.date}`,
         details: `السبب: ${decision.reason}.${s.evidence ? ` اللي اتقال: «${s.evidence}»${s.source ? ` (${s.source})` : ""}.` : ""}${decision.edited ? " السيلز عدّل تفاصيل الاقتراح قبل الجدولة." : ""}`,
       });
-    logAudit("قبول اقتراح زكي", "اقتراح", id, `${s.name}: متابعة يوم ${decision.date}`);
+    logAudit("قبول اقتراح شلبي", "اقتراح", id, `${s.name}: متابعة يوم ${decision.date}`);
   };
   /** A reminder the salesperson says is done: it stays done, and the system will not bring it back. */
   const markReminderDone = (taskId: string, branchId: string) => {

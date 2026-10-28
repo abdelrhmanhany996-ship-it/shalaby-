@@ -22,7 +22,7 @@ const PRICE_KEY = "almasar_crm_v1_dev_prices";
 // Approximate public list prices per 1M tokens (USD). Editable: they change by model and over time.
 const DEFAULT_PRICES = { textIn: 0.3, audioIn: 1.0, out: 2.5, egp: 50 };
 const MODE_LABELS: Record<string, string> = {
-  agent: "زكي (الشات بالأدوات)",
+  agent: "شلبي (الشات بالأدوات)",
   weekly: "الملخص الأسبوعي",
   coach: "خطة اليوم والأهداف",
   suggest: "اقتراحات المتابعة",
@@ -245,7 +245,7 @@ export function DeveloperPage() {
           <Num label="أقصى عدد مستخدمين" value={maxUsers} onChange={setMaxUsers} hint={`مستخدم دلوقتي: ${uQuota.used} من ${uQuota.max}`} />
           <Num label="طلبات الذكاء الاصطناعي في الساعة (لكل حساب)" value={aiHour} onChange={setAiHour} hint="لو عدّى الحد بيتوقف مؤقتًا" />
           <Num label="طلبات الذكاء الاصطناعي في اليوم (لكل حساب)" value={aiDay} onChange={setAiDay} hint="حماية من الإساءة وتكلفة زايدة" />
-          <Num label="اقتراحات زكي في اليوم (لكل سيلز)" value={sugDay} onChange={setSugDay} hint="الحد الأقصى لاقتراحات المتابعة" />
+          <Num label="اقتراحات شلبي في اليوم (لكل سيلز)" value={sugDay} onChange={setSugDay} hint="الحد الأقصى لاقتراحات المتابعة" />
           <button
             className="btn-primary"
             disabled={
@@ -275,7 +275,7 @@ export function DeveloperPage() {
           </button>
         </div>
         {error && <p className="notice warning">تعذر التحميل: {error}</p>}
-        {usage && Object.keys(usage.byMode).length === 0 && <p className="quiet-note">لسه مفيش استخدام مسجّل. هيبدأ يظهر بعد أول استخدام لزكي أو الصوت.</p>}
+        {usage && Object.keys(usage.byMode).length === 0 && <p className="quiet-note">لسه مفيش استخدام مسجّل. هيبدأ يظهر بعد أول استخدام لشلبي أو الصوت.</p>}
         {usage && Object.keys(usage.byMode).length > 0 && (
           <div className="overflow-x-auto">
             <table className="data-table">
@@ -313,7 +313,7 @@ export function DeveloperPage() {
               </tbody>
             </table>
             <p className="table-secondary" style={{ margin: 10 }}>
-              مستخدمون نشطون: {usage.activeUsers} · متوسط طلب زكي: {agent ? `${fmt(agent.in / agent.calls)} توكن إدخال / ${fmt(agent.out / agent.calls)} إخراج` : "—"}
+              مستخدمون نشطون: {usage.activeUsers} · متوسط طلب شلبي: {agent ? `${fmt(agent.in / agent.calls)} توكن إدخال / ${fmt(agent.out / agent.calls)} إخراج` : "—"}
             </p>
             {days.length > 0 && (
               <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 90, margin: "6px 10px 14px" }} aria-label="الاستهلاك اليومي">
@@ -334,7 +334,7 @@ export function DeveloperPage() {
               <thead>
                 <tr>
                   <th>المستخدم</th>
-                  <th>أسئلة زكي</th>
+                  <th>أسئلة شلبي</th>
                   <th>ملاحظات صوتية</th>
                   <th>إجمالي الطلبات</th>
                   <th>توكنز (إدخال / إخراج)</th>
@@ -424,7 +424,7 @@ export function DeveloperPage() {
           </div>
         </div>
         {proj.personDays === 0 ? (
-          <p className="quiet-note">لسه مفيش استخدام كفاية. جرّب زكي والصوت شوية وارجع هنا.</p>
+          <p className="quiet-note">لسه مفيش استخدام كفاية. جرّب شلبي والصوت شوية وارجع هنا.</p>
         ) : (
           <>
             <div className="field-grid" style={{ padding: "0 6px" }}>
@@ -468,7 +468,7 @@ export function DeveloperPage() {
         </div>
         <div className="field-grid" style={{ padding: "0 6px" }}>
           <Num label="عدد المستخدمين" value={users} onChange={setUsers} />
-          <Num label="أسئلة زكي لكل مستخدم في اليوم" value={qPerDay} onChange={setQPerDay} />
+          <Num label="أسئلة شلبي لكل مستخدم في اليوم" value={qPerDay} onChange={setQPerDay} />
           <Num label="متوسط خطوات الأدوات لكل سؤال" value={steps} onChange={setSteps} step={0.5} hint="كل خطوة = طلب للنموذج" />
           <Num label="توكنز الإدخال لكل طلب" value={inTok} onChange={setInTok} step={100} />
           <Num label="توكنز الإخراج لكل طلب" value={outTok} onChange={setOutTok} step={50} />
@@ -491,7 +491,7 @@ export function DeveloperPage() {
           <div className="metric">
             <span className="metric-top">تفصيل</span>
             <span className="metric-note" style={{ display: "block", lineHeight: 1.9 }}>
-              زكي: ${money(calc.agentCost)} ({fmt(calc.agentCalls)} طلب)
+              شلبي: ${money(calc.agentCost)} ({fmt(calc.agentCalls)} طلب)
               <br />
               الصوت: ${money(calc.voiceCost)} ({fmt(calc.voiceClips)} ملاحظة)
               <br />

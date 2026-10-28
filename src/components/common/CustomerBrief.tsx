@@ -77,10 +77,10 @@ export function CustomerBrief({ lead, compact = false }: { lead: Lead; compact?:
   if (state === "off") return null;
 
   return (
-    <section className={`brief-card${brief ? ` tone-${brief.tone}` : ""}${compact ? " is-compact" : ""}`} aria-label="ملخص زكي عن العميل">
+    <section className={`brief-card${brief ? ` tone-${brief.tone}` : ""}${compact ? " is-compact" : ""}`} aria-label="ملخص شلبي عن العميل">
       <div className="brief-head">
         <strong>
-          <Sparkles size={15} /> ملخص زكي
+          <Sparkles size={15} /> ملخص شلبي
         </strong>
         {brief && <span className="status-pill brief-tone">{toneLabel[brief.tone]}</span>}
         <button className="btn-secondary" onClick={run} disabled={state === "loading"}>
@@ -89,7 +89,7 @@ export function CustomerBrief({ lead, compact = false }: { lead: Lead; compact?:
         </button>
       </div>
       {state === "error" && <p className="notice warning">تعذر تجهيز الملخص دلوقتي، جرّب تاني بعد شوية.</p>}
-      {!brief && state === "loading" && <p className="quiet-note" style={{ padding: 0 }}>زكي بيراجع بيانات العميل…</p>}
+      {!brief && state === "loading" && <p className="quiet-note" style={{ padding: 0 }}>شلبي بيراجع بيانات العميل…</p>}
       {brief && (
         <dl className="brief-body">
           {brief.last_update && (

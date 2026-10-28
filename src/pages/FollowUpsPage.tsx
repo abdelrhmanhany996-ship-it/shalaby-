@@ -165,7 +165,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
       setMoveError(err instanceof Error ? err.message : "تعذر التأجيل.");
     }
   };
-  const originLabel: Record<string, string> = { manual: "جدولها السيلز", auto: "تلقائية من السيستم", zaki: "اقتراح من زكي" };
+  const originLabel: Record<string, string> = { manual: "جدولها السيلز", auto: "تلقائية من السيستم", zaki: "اقتراح من شلبي" };
   const flash = (text: string) => {
     setToast(text);
     window.setTimeout(() => setToast(""), 5000);
@@ -406,10 +406,10 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
           تذكيرات <span style={{ opacity: 0.65, marginInlineStart: 5 }}>{tasks.length}</span>
         </button>
         <button aria-pressed={view === "plan"} onClick={() => setView("plan")}>
-          خطة زكي اليوم
+          خطة شلبي اليوم
         </button>
         <button aria-pressed={view === "suggestions"} onClick={() => setView("suggestions")}>
-          اقتراحات زكي
+          اقتراحات شلبي
           {aiSuggestions.filter((x) => x.status === "pending" && x.agentId === effectiveUser.id).length > 0 && (
             <span className="tab-alert" style={{ background: "var(--wait)", color: "#3b2600" }}>
               {aiSuggestions.filter((x) => x.status === "pending" && x.agentId === effectiveUser.id).length} جديد
@@ -502,7 +502,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
                 ["all", "الكل"],
                 ["manual", "جدولها السيلز بنفسه"],
                 ["auto", "تلقائية من السيستم"],
-                ["zaki", "من اقتراحات زكي"],
+                ["zaki", "من اقتراحات شلبي"],
               ] as const
             ).map(([id, label]) => (
               <button key={id} aria-pressed={origin === id} onClick={() => setOrigin(id)}>

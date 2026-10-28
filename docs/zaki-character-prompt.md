@@ -1,4 +1,4 @@
-# برومبت شخصية زكي (لتوليد الصور)
+# برومبت شخصية شلبي (لتوليد الصور)
 
 ## الوصف الأساسي (الصقه في كل مرة)
 Cute friendly Egyptian sales-support employee mascot named "Zaki", early 30s, warm tan skin, short neat dark-brown hair, big expressive dark eyes with small white highlights, rosy cheeks, soft smile. He wears a deep brand-red polo shirt with a small white collar and a tiny white name tag, and a slim black customer-service headset with a red ear cushion. Half-body portrait (head and shoulders to chest), centered, facing slightly toward the viewer. Style: modern 3D-cartoon / Pixar-like, soft rounded shapes, smooth lighting, clean vector-like finish, consistent proportions. Transparent background, no text, no shadow on the ground, square 1:1 canvas, 1024x1024.

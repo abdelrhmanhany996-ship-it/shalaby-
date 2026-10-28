@@ -198,7 +198,7 @@ export function auditReport(d: ReportData, f: ReportFilter): ReportTable {
 /** What each salesperson did in the period and what came of it, including how they treated Zaki's suggestions. */
 export function salesEffort(d: ReportData, f: ReportFilter): ReportTable {
   return {
-    headers: ["السيلز", "الفرع", "زيارات استقبلها", "عملاء جدد", "متابعات اتجدولت", "متابعات اتعملت", "نسبة الإنجاز %", "متابعات متأخرة حاليًا", "طلبات تقييم اتبعتت", "تقييمات وصلت", "عدد المشتريات", "إجمالي المبيعات (ج.م)", "تذكيرات اتنجزت", "اقتراحات زكي", "اتقبلت", "اتفضّت", "لسه مستنية"],
+    headers: ["السيلز", "الفرع", "زيارات استقبلها", "عملاء جدد", "متابعات اتجدولت", "متابعات اتعملت", "نسبة الإنجاز %", "متابعات متأخرة حاليًا", "طلبات تقييم اتبعتت", "تقييمات وصلت", "عدد المشتريات", "إجمالي المبيعات (ج.م)", "تذكيرات اتنجزت", "اقتراحات شلبي", "اتقبلت", "اتفضّت", "لسه مستنية"],
     rows: d.users
       .filter((u) => isSalesCapable(u) && u.active !== false && inBranch(u.branchId, f))
       .map((u) => {
@@ -279,8 +279,8 @@ export const reportCatalog: ReportDef[] = [
   { id: "overdue-followups", tier: "core", title: "المتابعات المتأخرة", description: "مين اتأخر، كام يوم، وعند مين. الأقدم أول.", audience: "المدير العام ومديرو الفروع", needs: ["followups.view"], build: overdueFollowUps },
   { id: "not-yet-reasons", tier: "core", title: "أسباب «لسه»", description: "ليه العملاء ما اشتروش: عدد كل سبب ونسبته وتوزيعه على الفروع.", audience: "المالك والمدير العام", needs: ["customers.view"], build: notYetReasons },
   { id: "sales-by-department", tier: "core", title: "المبيعات حسب القسم والفرع", description: "مبيعات كل فرع موزعة على الأقسام الأربعة، مع إجمالي الشركة.", audience: "المالك", needs: ["bookings.view"], build: salesByDepartment },
-  { id: "sales-effort", tier: "core", title: "جهد السيلز (شهري)", description: "كل سيلز: زيارات، متابعات اتعملت ونسبة إنجازها، تقييمات، مشتريات، وتعامله مع اقتراحات زكي.", audience: "المالك والمدير العام", needs: ["reports.view"], build: salesEffort },
-  { id: "zaki-suggestions", tier: "core", title: "اقتراحات زكي: اتقبل واتفضّ إيه", description: "كل اقتراح زكي عمله، وقرار السيلز عليه وسبب الرفض، ومدى تعديل الموعد.", audience: "المالك والمدير العام", needs: ["reports.view"], build: zakiSuggestionsReport },
+  { id: "sales-effort", tier: "core", title: "جهد السيلز (شهري)", description: "كل سيلز: زيارات، متابعات اتعملت ونسبة إنجازها، تقييمات، مشتريات، وتعامله مع اقتراحات شلبي.", audience: "المالك والمدير العام", needs: ["reports.view"], build: salesEffort },
+  { id: "zaki-suggestions", tier: "core", title: "اقتراحات شلبي: اتقبل واتفضّ إيه", description: "كل اقتراح شلبي عمله، وقرار السيلز عليه وسبب الرفض، ومدى تعديل الموعد.", audience: "المالك والمدير العام", needs: ["reports.view"], build: zakiSuggestionsReport },
   { id: "weekly-summary", tier: "extra", title: "ملخص الفترة (للطباعة أو PDF)", description: "صفحة واحدة بأهم الأرقام للفترة المختارة، جاهزة للطباعة أو الحفظ PDF.", audience: "المالك", needs: ["reports.view"], print: true, build: weeklySummary },
   { id: "brokers", tier: "extra", title: "أداء الوسطاء", description: "كل وسيط: عملاء جابهم، كام اشترى، وإجمالي مشترياتهم.", audience: "المالك", needs: ["brokers.view"], build: brokerPerformance },
   { id: "employee-ratings", tier: "extra", title: "تقييمات الموظفين", description: "تقييم كل موظف من عملائه: المتوسط، المحسوب، المستوى، والشكاوى.", audience: "المالك والمدير العام", needs: ["reports.view"], build: employeeRatingsReport },

@@ -132,14 +132,14 @@ function Mouth({ mood }: { mood: ZakiMood }) {
 /** The built-in, hand-drawn Zaki: a friendly sales colleague with a headset. */
 function ZakiDrawing({ mood }: { mood: ZakiMood }) {
   return (
-    <svg viewBox="0 0 200 200" className={`zaki-svg zaki-mood-${mood}`} role="img" aria-label="زكي">
+    <svg viewBox="0 0 200 200" className={`zaki-svg zaki-mood-${mood}`} role="img" aria-label="شلبي">
       {/* body */}
       <path d="M26 200 Q28 150 72 142 L128 142 Q172 150 174 200 Z" fill={RED} />
       <path d="M72 142 L100 168 L128 142 Z" fill="#a51a21" />
       <path d="M84 142 L100 160 L116 142 L108 140 L100 150 L92 140 Z" fill="#fff" />
       <g>
         <rect x="132" y="162" width="26" height="15" rx="3" fill="#fff" />
-        <text x="145" y="173" fontSize="9" textAnchor="middle" fill="#2a1d19" fontWeight="700">زكي</text>
+        <text x="145" y="173" fontSize="9" textAnchor="middle" fill="#2a1d19" fontWeight="700">شلبي</text>
       </g>
       {/* neck */}
       <rect x="88" y="124" width="24" height="24" rx="8" fill={SKIN_SHADE} />
@@ -205,7 +205,7 @@ export function ZakiAvatar({ mood = "idle", size = 64, className = "" }: { mood?
   return (
     <span className={`zaki-avatar-art ${className}`} style={{ width: size, height: size }}>
       {art === "loading" ? null : art === "ok" ? (
-        <img src={`${FILE_BASE}${mood}.png`} alt="زكي" draggable={false} className={`zaki-img zaki-mood-${mood}`} />
+        <img src={`${FILE_BASE}${mood}.png`} alt="شلبي" draggable={false} className={`zaki-img zaki-mood-${mood}`} />
       ) : (
         <ZakiDrawing mood={drawingFallback[mood] ?? mood} />
       )}

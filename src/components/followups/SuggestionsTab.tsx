@@ -45,13 +45,13 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
     let made = 0;
     for (const [i, c] of cands.entries()) {
       if (left <= 0 || checksLeft <= 0) break;
-      setProgress(`زكي بيراجع ${c.name} (${i + 1} من ${cands.length})…`);
+      setProgress(`شلبي بيراجع ${c.name} (${i + 1} من ${cands.length})…`);
       let r;
       try {
         r = await followUpSuggestion(c.bundle);
       } catch (e) {
         setState("error");
-        setMessage(e instanceof Error ? e.message : "زكي مش متاح دلوقتي.");
+        setMessage(e instanceof Error ? e.message : "شلبي مش متاح دلوقتي.");
         return;
       }
       checksLeft--;
@@ -67,7 +67,7 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
     }
     setProgress("");
     setState("done");
-    setMessage(made ? `زكي لقى ${made} فرصة جديدة.` : cands.length ? "زكي راجع البيانات ومفيش فرص جديدة دلوقتي." : "مفيش بيانات جديدة تستاهل المراجعة.");
+    setMessage(made ? `شلبي لقى ${made} فرصة جديدة.` : cands.length ? "شلبي راجع البيانات ومفيش فرص جديدة دلوقتي." : "مفيش بيانات جديدة تستاهل المراجعة.");
   };
 
   // Opening the tab reviews the day's new data once, if the assistant is on.
@@ -119,7 +119,7 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
     try {
       decideSuggestion(s.id, { accept: false, reason: rejectWhy });
       setFlow(null);
-      flash("تم الرفض، وزكي مش هيقترحها تاني على نفس الكلام.");
+      flash("تم الرفض، وشلبي مش هيقترحها تاني على نفس الكلام.");
     } catch (e) {
       flash(e instanceof Error ? e.message : "تعذر الرفض.");
     }
@@ -133,9 +133,9 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
         <div>
           <h2>
             <Sparkles size={18} style={{ display: "inline", marginInlineEnd: 6 }} />
-            اقتراحات زكي
+            اقتراحات شلبي
           </h2>
-          <p>زكي بيقرا ملاحظات عملائك ووسطائك، ولو لقى فرصة ما اتجدولش لها متابعة (زي «هيبني فيلا كمان شهر») بيقترحها هنا. أنت اللي بتقرر.</p>
+          <p>شلبي بيقرا ملاحظات عملائك ووسطائك، ولو لقى فرصة ما اتجدولش لها متابعة (زي «هيبني فيلا كمان شهر») بيقترحها هنا. أنت اللي بتقرر.</p>
         </div>
         <button className="btn-secondary" onClick={() => void run()} disabled={state === "running" || state === "off" || budget.left <= 0}>
           <RefreshCw size={15} />
@@ -146,8 +146,8 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
         النهارده: {budget.made} من {perDay} اقتراح · آخر 30 يوم: اتقبل {month.accepted} واتفضّ {month.rejected}
         {month.edited ? ` (منها ${month.edited} اتعدّلت قبل القبول)` : ""}
       </p>
-      {state === "off" && <p className="notice warning">زكي مش مفعّل على السيرفر دلوقتي، فمش هيقدر يطلّع اقتراحات.</p>}
-      {state === "running" && <p className="notice" role="status">{progress || "زكي بيراجع البيانات…"}</p>}
+      {state === "off" && <p className="notice warning">شلبي مش مفعّل على السيرفر دلوقتي، فمش هيقدر يطلّع اقتراحات.</p>}
+      {state === "running" && <p className="notice" role="status">{progress || "شلبي بيراجع البيانات…"}</p>}
       {message && <p className={`notice${state === "error" ? " warning" : ""}`} role="status">{message}</p>}
       {toast && <p className="notice" role="status">{toast}</p>}
 
@@ -155,7 +155,7 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
         <div className="empty-state">
           <Sparkles size={28} strokeWidth={1.3} />
           <h3>مفيش اقتراحات مستنية قرارك</h3>
-          <p>لما زكي يلاقي فرصة في ملاحظات العملاء هتظهر هنا.</p>
+          <p>لما شلبي يلاقي فرصة في ملاحظات العملاء هتظهر هنا.</p>
         </div>
       )}
 
@@ -169,7 +169,7 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
               <h2>{s.name}</h2>
               <span className="followup-pills">
                 <span className="status-pill">{s.partyKind === "broker" ? "وسيط" : "عميل"}</span>
-                <span className="status-pill is-warning">اقتراح زكي</span>
+                <span className="status-pill is-warning">اقتراح شلبي</span>
               </span>
             </div>
             <p>
@@ -185,7 +185,7 @@ export function SuggestionsTab({ onOpenLead }: { onOpenLead: (id: string) => voi
             )}
             {near && <p className="notice warning">عندك متابعة مجدولة قريبة ({near.scheduledAt.slice(0, 10)}): {near.reason}. ممكن الاقتراح ده يتكرر معاها.</p>}
             <details>
-              <summary>الداتا اللي زكي بنى عليها الاقتراح ({s.snapshot?.length ?? 0})</summary>
+              <summary>الداتا اللي شلبي بنى عليها الاقتراح ({s.snapshot?.length ?? 0})</summary>
               <ul className="suggestion-data">{(s.snapshot ?? []).map((l, i) => <li key={i}>{l}</li>)}</ul>
               {lead && (
                 <button className="btn-text" onClick={() => onOpenLead(lead.id)}>

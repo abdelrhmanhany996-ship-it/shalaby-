@@ -178,9 +178,9 @@ await as("agentA", async (page, go) => {
   await page.locator("article", { hasText: "متابعة عرض السعر" }).locator("select[aria-label='أولوية المتابعة']").selectOption("high");
   await page.waitForTimeout(1500);
   check((await readDoc("followUps/F1"))?.priority === "high", "priority saved");
-  await page.getByRole("button", { name: /خطة زكي اليوم/ }).click();
+  await page.getByRole("button", { name: /خطة شلبي اليوم/ }).click();
   await page.waitForTimeout(800);
-  check((await main.innerText()).includes("خطة زكي مش متفعّلة"), "the daily plan tab opens and says plainly it is not enabled without a Claude key");
+  check((await main.innerText()).includes("خطة شلبي مش متفعّلة"), "the daily plan tab opens and says plainly it is not enabled without a Claude key");
 });
 
 await as("bm1", async (page, go) => {

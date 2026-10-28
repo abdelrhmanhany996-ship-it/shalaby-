@@ -105,7 +105,7 @@ export function DailyPlan({ onOpenLead }: { onOpenLead: (id: string) => void }) 
       <section className="panel">
         <div className="empty-state">
           <Sparkles size={28} strokeWidth={1.3} />
-          <h3>خطة زكي مش متفعّلة</h3>
+          <h3>خطة شلبي مش متفعّلة</h3>
           <p>محتاجة مفتاح Claude على السيرفر. التفاصيل في ملف docs/ai-setup.md.</p>
         </div>
       </section>
@@ -115,7 +115,7 @@ export function DailyPlan({ onOpenLead }: { onOpenLead: (id: string) => void }) 
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>خطة زكي النهارده</h2>
+          <h2>خطة شلبي النهارده</h2>
           <p>
             {shown
               ? `اتجهزت الساعة ${hhmm(shown.at)} من بيانات نطاقك. بتتحدّث لما تدوس تحديث، وكمان تلقائيًا طول ما الصفحة دي مفتوحة لو البيانات اتغيرت.`
@@ -245,7 +245,7 @@ export function DailyPlan({ onOpenLead }: { onOpenLead: (id: string) => void }) 
             </p>
           )}
           <p className="quiet-note" style={{ marginTop: 8 }}>
-            توصيات زكي مبنية على بيانات النظام بس، ومحتاجة حكمك قبل التنفيذ.
+            توصيات شلبي مبنية على بيانات النظام بس، ومحتاجة حكمك قبل التنفيذ.
           </p>
         </div>
       )}

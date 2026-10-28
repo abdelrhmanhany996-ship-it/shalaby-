@@ -91,7 +91,7 @@ test("sales effort counts what each salesperson did and how they treated Zaki's 
   assert.equal(row["زيارات استقبلها"], 1);
   assert.equal(row["متابعات اتعملت"], 1);
   assert.equal(row["متابعات متأخرة حاليًا"], 1);
-  assert.deepEqual([row["اقتراحات زكي"], row["اتقبلت"], row["اتفضّت"]], [2, 1, 1]);
+  assert.deepEqual([row["اقتراحات شلبي"], row["اتقبلت"], row["اتفضّت"]], [2, 1, 1]);
   const z = zakiSuggestionsReport(d, { from: "2026-10-01", to: "2026-10-31" });
   assert.equal(z.rows.length, 2);
   assert.equal(z.rows.find((r) => r[4] === "عميل")![10], "نعم");

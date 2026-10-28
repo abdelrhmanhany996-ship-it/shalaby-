@@ -54,7 +54,7 @@ export function WeeklySummary() {
       <div className="panel-header">
         <div>
           <h2>ملخص الأسبوع بالكلام</h2>
-          <p>زكي بيقارن الأسبوع ده بالأسبوع اللي قبله: إيه اتحسّن، إيه وقع وليه، أداء كل موظف، الفرص اللي ضاعت ومين المسؤول، والشكاوى ووقت حلها.</p>
+          <p>شلبي بيقارن الأسبوع ده بالأسبوع اللي قبله: إيه اتحسّن، إيه وقع وليه، أداء كل موظف، الفرص اللي ضاعت ومين المسؤول، والشكاوى ووقت حلها.</p>
         </div>
         {state !== "off" && (
           <button className="btn-secondary" onClick={generate} disabled={state === "loading"}>
@@ -63,7 +63,7 @@ export function WeeklySummary() {
           </button>
         )}
       </div>
-      {state === "off" && <p className="quiet-note">زكي لسه مش متفعّل على الموقع ده (محتاج إعداد مفتاح الذكاء الاصطناعي).</p>}
+      {state === "off" && <p className="quiet-note">شلبي لسه مش متفعّل على الموقع ده (محتاج إعداد مفتاح الذكاء الاصطناعي).</p>}
       {state === "error" && <p className="notice warning">تعذر إعداد الملخص حاليًا، جرّب تاني بعد شوية.</p>}
       {report && (
         <div style={{ padding: "0 6px 8px" }}>
