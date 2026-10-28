@@ -59,6 +59,7 @@ export const permissionDefinitions = [
   ["targets.manage", "تحديد أهداف الموظفين وقواعد حساب الإنجاز"],
   ["accounts.view", "عرض الحسابات والحركات المالية"],
   ["accounts.manage", "تسجيل الحركات المالية وإلغاؤها"],
+  ["telegram.manage", "إضافة وتعديل جروبات التليجرام"],
 ] as const;
 export type Permission = (typeof permissionDefinitions)[number][0];
 export type PermissionProfile =
@@ -118,6 +119,7 @@ export const defaultPermissionMatrix: PermissionMatrix = {
     "targets.manage",
     "accounts.view",
     "accounts.manage",
+    "telegram.manage",
   ],
   // Also sells: registers customers, follows up and records purchases, besides seeing every branch.
   general: [
@@ -133,6 +135,7 @@ export const defaultPermissionMatrix: PermissionMatrix = {
     "staff.manage",
     "targets.view",
     "targets.manage",
+    "telegram.manage",
   ],
   specialist_sales: [
     "customers.view",
@@ -167,7 +170,7 @@ export const defaultPermissionMatrix: PermissionMatrix = {
   ],
   // The branch sales manager is the branch's salesperson: customers, visits, follow-ups, purchases, reviews.
   // Staff and structure screens come back when salespeople are added under them.
-  branch: [...daily, "brokers.view", "targets.view", "targets.manage"],
+  branch: [...daily, "brokers.view", "targets.view", "targets.manage", "telegram.manage"],
   employee: daily,
 };
 export const normalizeUser = (user: User): User => ({

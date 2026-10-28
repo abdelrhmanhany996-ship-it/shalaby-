@@ -241,6 +241,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // The Telegram groups directory: every staff member reads it, managers keep it, and links must be real Telegram links.
+    match /telegramGroups/{docId} {
+      allow read: if isStaff();
+      allow create, update: if isManager()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.link is string
+        && (request.resource.data.link.matches('https://(t\\.me|telegram\\.me)/[A-Za-z0-9_+/\\-]{2,100}')
+            || request.resource.data.link.matches('tg://(join\\?invite|resolve\\?domain)=[A-Za-z0-9_\\-]{2,100}'));
+      allow delete: if isManager();
+    }
+
     // Account list, opening balances and categories: only the people who keep the books.
     match /accountingSettings/{docId} {
       allow read, write: if isAccounts();

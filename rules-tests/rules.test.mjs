@@ -319,3 +319,25 @@ test("target rules (settings/targets) are written by the owner, developer and ge
   await assertFails(setDoc(doc(db("regional"), "settings", "distribution"), { x: 1 }));
   await assertFails(setDoc(doc(db("regional"), "settings", "license"), { x: 1 }));
 });
+
+// ---------- Telegram groups directory ----------
+const group = (over = {}) => ({ id: "G1", name: "جروب المبيعات", link: "https://t.me/sales_team", active: true, createdAt: "t", createdById: "u", createdByName: "u", ...over });
+
+test("telegram groups: every staff member reads, only managers write, links must be Telegram links", async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "telegramGroups", "R1"), group({ id: "R1" })));
+  for (const k of ["agentA", "agentC", "tl", "sup", "acct", "bm1", "regional", "gm"]) await assertSucceeds(getDoc(doc(db(k), "telegramGroups", "R1")));
+  await assertFails(getDoc(doc(db("gone"), "telegramGroups", "R1")));
+  await assertFails(getDoc(doc(db(null), "telegramGroups", "R1")));
+  for (const k of ["bm1", "regional", "gm", "dev"]) await assertSucceeds(setDoc(doc(db(k), "telegramGroups", "W" + k), group({ id: "W" + k })));
+  for (const k of ["agentA", "tl", "sup", "acct"]) await assertFails(setDoc(doc(db(k), "telegramGroups", "X" + k), group({ id: "X" + k })));
+  for (const [i, link] of ["https://evil.com/t.me/abc", "https://t.me.evil.com/abc", "javascript:alert(1)", "http://t.me/abc", "https://t.me/a", "ftp://t.me/abcde", 5].entries())
+    await assertFails(setDoc(doc(db("gm"), "telegramGroups", "B" + i), group({ id: "B" + i, link })));
+  for (const [i, link] of ["https://t.me/+AbC123xyz", "https://telegram.me/team_chat", "tg://join?invite=AbC123"].entries())
+    await assertSucceeds(setDoc(doc(db("gm"), "telegramGroups", "OK" + i), group({ id: "OK" + i, link })));
+  await assertFails(setDoc(doc(db("gm"), "telegramGroups", "N1"), group({ id: "N1", name: "ا" })));
+  await assertFails(updateDoc(doc(db("agentA"), "telegramGroups", "R1"), { name: "تعديل" }));
+  await assertSucceeds(updateDoc(doc(db("bm1"), "telegramGroups", "R1"), { name: "تعديل المدير" }));
+  await assertFails(updateDoc(doc(db("bm1"), "telegramGroups", "R1"), { link: "https://evil.com/x" }));
+  await assertFails(import("firebase/firestore").then((m) => m.deleteDoc(doc(db("agentA"), "telegramGroups", "R1"))));
+  await assertSucceeds(import("firebase/firestore").then((m) => m.deleteDoc(doc(db("bm1"), "telegramGroups", "R1"))));
+});

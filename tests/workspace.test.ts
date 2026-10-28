@@ -600,3 +600,29 @@ test("accounting: only the owner/developer and accounts specialists see or chang
     assert.deepEqual(w.calls, []);
   }
 });
+
+test("telegram groups: managers change the directory, salespeople only read it, and everyone reaches the page", () => {
+  const mk = (actor: User) => {
+    const s = spy(["addTelegramGroup", "updateTelegramGroup", "setTelegramGroupActive", "removeTelegramGroup"]);
+    return { ...fixture(actor, { telegramGroups: [], ...s.fns }), calls: s.calls };
+  };
+  for (const actor of [employee, manager, director, makeUser("supervisor", { id: "sup1", specialty: "accounts", branchId: employee.branchId })]) {
+    assert.equal(canAccessPage(mk(actor).view.effectiveUser, "telegram"), true, `${actor.role} reaches the page`);
+  }
+  for (const actor of [manager, director]) {
+    const w = mk(actor);
+    w.view.addTelegramGroup({ name: "جروب", link: "t.me/abcde" });
+    w.view.updateTelegramGroup("g", { name: "جروب", link: "t.me/abcde" });
+    w.view.setTelegramGroupActive("g", false);
+    w.view.removeTelegramGroup("g");
+    assert.deepEqual(w.calls, ["addTelegramGroup", "updateTelegramGroup", "setTelegramGroupActive", "removeTelegramGroup"]);
+  }
+  for (const actor of [employee, makeUser("supervisor", { id: "sup2", specialty: "accounts", branchId: employee.branchId })]) {
+    const w = mk(actor);
+    assert.throws(() => w.view.addTelegramGroup({ name: "جروب", link: "t.me/abcde" }));
+    assert.throws(() => w.view.updateTelegramGroup("g", { name: "جروب", link: "t.me/abcde" }));
+    assert.throws(() => w.view.setTelegramGroupActive("g", false));
+    assert.throws(() => w.view.removeTelegramGroup("g"));
+    assert.deepEqual(w.calls, []);
+  }
+});

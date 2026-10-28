@@ -12,6 +12,7 @@ import { asDemo, planDemoRemoval, type DemoWorld, type KnownDemoIds } from "../l
 import { egyptGovernorates, findEgyptGovernorate } from "../data/egypt";
 import { today, followUpStatus, statusNames, sourceNames, followUpTypeNames } from "../lib/presentation";
 import { rescheduled } from "../lib/followUps";
+import { edited as editedGroup, newGroup } from "../lib/telegram";
 import { defaultTargetSettings, sanitizeTargetSettings, targetId, withAmount } from "../lib/targets";
 import { defaultAccountingSettings, newEntry, sanitizeAccountingSettings, voided, type EntryInput } from "../lib/accounting";
 import {
@@ -49,6 +50,7 @@ import {
   FollowUp,
   FollowUpPriority,
   EmployeeTarget,
+  TelegramGroup,
   TargetSettings,
   AccountEntry,
   AccountingSettings,
@@ -221,6 +223,12 @@ export interface CRMContextType {
     extra?: FollowUpExtra,
   ) => void;
 
+  telegramGroups: TelegramGroup[];
+  addTelegramGroup: (input: { name: string; link: string; description?: string; branchId?: string }) => TelegramGroup;
+  updateTelegramGroup: (id: string, input: { name: string; link: string; description?: string; branchId?: string }) => void;
+  setTelegramGroupActive: (id: string, active: boolean) => void;
+  removeTelegramGroup: (id: string) => void;
+
   employeeTargets: EmployeeTarget[];
   targetSettings: TargetSettings;
   setEmployeeTarget: (userId: string, month: string, amount: number, note?: string) => EmployeeTarget;
@@ -331,6 +339,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => saveStorage("not_bought", notBoughtRecords), [notBoughtRecords]);
   const [reminderDone, setReminderDone] = useState<ReminderDone[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>([]);
+  const [telegramGroups, setTelegramGroups] = useState<TelegramGroup[]>([]);
   const [employeeTargets, setEmployeeTargets] = useState<EmployeeTarget[]>([]);
   const [targetSettings, setTargetSettings] = useState<TargetSettings>(defaultTargetSettings);
   const [accountEntries, setAccountEntries] = useState<AccountEntry[]>([]);
@@ -426,6 +435,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   useFirestoreCollection("bookings", bookings, setBookings, { scope: scope.bookings });
   useFirestoreCollection("timelineEvents", timelineEvents, setTimelineEvents, { scope: scope.timeline });
   useFirestoreCollection("activityLogs", auditLogs, setAuditLogs, { scope: scope.audit });
+  useFirestoreCollection("telegramGroups", telegramGroups, setTelegramGroups, { scope: "all" });
   useFirestoreCollection("employeeTargets", employeeTargets, setEmployeeTargets, { scope: scope.employeeTargets });
   useFirestoreCollection("accountingEntries", accountEntries, setAccountEntries, { scope: scope.accounting });
   const targetsWriter = !!authForScope && ["admin", "general_manager", "regional_manager"].includes(authForScope.role);
@@ -1268,6 +1278,33 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     logAudit("تعديل متابعة", "متابعة", id, `تعديل متابعة ${original.leadName}${clean.priority ? ` (الأولوية: ${clean.priority})` : ""}`);
   };
 
+  // Telegram groups directory
+  const addTelegramGroup = (input: { name: string; link: string; description?: string; branchId?: string }): TelegramGroup => {
+    const g = newGroup(input, `tg-${crypto.randomUUID()}`, { id: effectiveUser.id, name: effectiveUser.name }, new Date().toISOString());
+    setTelegramGroups((prev) => [g, ...prev]);
+    logAudit("إضافة جروب تليجرام", "جروب تليجرام", g.id, g.name);
+    return g;
+  };
+  const updateTelegramGroup = (id: string, input: { name: string; link: string; description?: string; branchId?: string }) => {
+    const g = telegramGroups.find((x) => x.id === id);
+    if (!g) return;
+    const next = editedGroup(g, input, new Date().toISOString());
+    setTelegramGroups((prev) => prev.map((x) => (x.id === id ? next : x)));
+    logAudit("تعديل جروب تليجرام", "جروب تليجرام", id, next.name);
+  };
+  const setTelegramGroupActive = (id: string, active: boolean) => {
+    const g = telegramGroups.find((x) => x.id === id);
+    if (!g || g.active === active) return;
+    setTelegramGroups((prev) => prev.map((x) => (x.id === id ? { ...x, active, updatedAt: new Date().toISOString() } : x)));
+    logAudit(active ? "تفعيل جروب تليجرام" : "إيقاف جروب تليجرام", "جروب تليجرام", id, g.name);
+  };
+  const removeTelegramGroup = (id: string) => {
+    const g = telegramGroups.find((x) => x.id === id);
+    if (!g) return;
+    setTelegramGroups((prev) => prev.filter((x) => x.id !== id));
+    logAudit("حذف جروب تليجرام", "جروب تليجرام", id, g.name);
+  };
+
   // Employee targets
   const setEmployeeTarget = (userId: string, month: string, amount: number, note?: string): EmployeeTarget => {
     const user = users.find((u) => u.id === userId);
@@ -2021,6 +2058,11 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
         updateFollowUpResult,
         rescheduleFollowUp,
         updateFollowUpDetails,
+        telegramGroups,
+        addTelegramGroup,
+        updateTelegramGroup,
+        setTelegramGroupActive,
+        removeTelegramGroup,
         employeeTargets,
         targetSettings,
         setEmployeeTarget,

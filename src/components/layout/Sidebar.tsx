@@ -10,7 +10,6 @@ import {
   Award,
   Code2,
   Settings,
-  Compass,
   FileText,
   UserRound,
   X,
@@ -19,14 +18,13 @@ import {
   ArrowUpLeft,
   Network,
   ShieldCheck,
-  MessageSquareWarning,
   Target,
   Landmark,
+  Send,
 } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { ShalabyLogo } from "../common/ShalabyLogo";
 import { followUpStatus, isManagement } from "../../lib/presentation";
-import { complaintState, isComplaint, reviewPhase } from "../../lib/reviews";
 
 interface Props {
   activeTab: string;
@@ -40,12 +38,7 @@ export function Sidebar({
   sidebarOpen,
   setSidebarOpen,
 }: Props) {
-  const { effectiveUser, followUps, branches, leads, reviewRequests, reviewNotes } = useCRM();
-  // Managers see open complaints; salespeople see reviews that need their 48-hour nudge.
-  const manager = ["admin", "general_manager", "regional_manager", "branch_manager"].includes(effectiveUser.role);
-  const feedbackCount = reviewRequests.filter((r) =>
-    manager ? isComplaint(r) && complaintState(r, reviewNotes) === "open" : reviewPhase(r) === "reminder_due",
-  ).length;
+  const { effectiveUser, followUps } = useCRM();
   const count = followUps.filter((f) =>
     ["due", "overdue"].includes(followUpStatus(f)),
   ).length;
@@ -122,8 +115,7 @@ export function Sidebar({
             PhoneCall,
             count,
           )}
-          {nav("visits", "الزيارات", Compass)}
-          {nav("feedback", "التقييمات والشكاوى", MessageSquareWarning, feedbackCount)}
+          {nav("telegram", "جروبات التليجرام", Send)}
           <p className="nav-group-label">المبيعات</p>
           {nav("bookings", "المشتريات", ShoppingBag)}
           {nav("targets", hasPermission(effectiveUser, "targets.view") ? "الأهداف" : "هدفي", Target)}

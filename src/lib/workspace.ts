@@ -430,6 +430,23 @@ export function createWorkspace(raw: CRMContextType) {
       requireAssignment(data.branchId, data.assignedAgentId);
       return raw.addFollowUp(data);
     }) as CRMContextType["addFollowUp"],
+    // Telegram groups: everyone reads the directory; only people who manage it change it.
+    addTelegramGroup: ((input) => {
+      require(hasPermission(actor, "telegram.manage"));
+      return raw.addTelegramGroup(input);
+    }) as CRMContextType["addTelegramGroup"],
+    updateTelegramGroup: ((id, input) => {
+      require(hasPermission(actor, "telegram.manage"));
+      raw.updateTelegramGroup(id, input);
+    }) as CRMContextType["updateTelegramGroup"],
+    setTelegramGroupActive: ((id, active) => {
+      require(hasPermission(actor, "telegram.manage"));
+      raw.setTelegramGroupActive(id, active);
+    }) as CRMContextType["setTelegramGroupActive"],
+    removeTelegramGroup: ((id) => {
+      require(hasPermission(actor, "telegram.manage"));
+      raw.removeTelegramGroup(id);
+    }) as CRMContextType["removeTelegramGroup"],
     // Targets: managers see their scope's rows; a salesperson sees only their own.
     employeeTargets: (raw.employeeTargets ?? []).filter((t) =>
       hasPermission(actor, "targets.view")

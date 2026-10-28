@@ -207,7 +207,8 @@ export const canEditStaff = (actor: User, target: User, branches: Branch[]) =>
     actor.role === "regional_manager" ||
     (!!target.branchId && canSeeBranch(actor, target.branchId, branches)));
 export function canAccessPage(u: User, page: string) {
-  if (["dashboard", "analytics_dashboard", "settings"].includes(page))
+  // The Telegram groups directory is for everyone; only managers change it.
+  if (["dashboard", "analytics_dashboard", "settings", "telegram"].includes(page))
     return true;
   if (page === "permissions") return isDirector(u);
   if (page === "developer") return u.role === "admin";

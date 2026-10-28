@@ -50,6 +50,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((m) => ({ de
 const BrokersPage = lazy(() => import("./pages/BrokersPage").then((m) => ({ default: m.BrokersPage })));
 const OverviewPage = lazy(() => import("./pages/OverviewPage").then((m) => ({ default: m.OverviewPage })));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((m) => ({ default: m.DeveloperPage })));
+const TelegramPage = lazy(() => import("./pages/TelegramPage").then((m) => ({ default: m.TelegramPage })));
 const TargetsPage = lazy(() => import("./pages/TargetsPage").then((m) => ({ default: m.TargetsPage })));
 const AccountsPage = lazy(() => import("./pages/AccountsPage").then((m) => ({ default: m.AccountsPage })));
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage").then((m) => ({ default: m.FeedbackPage })));
@@ -194,6 +195,8 @@ const AppContent: React.FC = () => {
             {activeTab === "reports" && <ReportsPage />}
 
             {activeTab === "targets" && <TargetsPage />}
+
+            {activeTab === "telegram" && <TelegramPage />}
 
             {activeTab === "accounts" && canAccessPage(effectiveUser, "accounts") && <AccountsPage />}
 

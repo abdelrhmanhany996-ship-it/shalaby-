@@ -49,6 +49,7 @@ const titles: Record<string, string> = {
   teams: "فرق العمل",
   audit: "سجل العمليات",
   targets: "الأهداف",
+  telegram: "جروبات التليجرام",
   accounts: "الحسابات",
   settings: "الإعدادات",
 };

@@ -88,40 +88,7 @@ await as("agentA", async (page, go) => {
   const txt = await page.locator("main").innerText();
   check(txt.includes("عميل أحمد الخاص"), "agent sees own customer");
   check(!txt.includes("عميل المدير") && !txt.includes("عميل فرع تاني"), "agent does not see colleagues' or other branches' customers");
-  await go("الزيارات");
-  await page.getByRole("button", { name: "تسجيل زيارة" }).click();
-  await page.getByRole("radio", { name: /عميل ومعاه وسيط/ }).click();
-  await page.getByPlaceholder("اكتب اسم الوسيط أو رقمه").fill("وسيط");
-  const brokerOptions = await page.getByRole("option").allInnerTexts();
-  check(brokerOptions.some((o) => o.includes("وسيط فرع 1")) && !brokerOptions.some((o) => o.includes("وسيط فرع 2")), "agent picks brokers of own branch only");
-  // Search-first: nobody matches, so the new customer starts from what was typed.
-  await page.getByPlaceholder("اكتب اسم العميل أو رقمه").fill("زائر جديد");
-  await page.getByRole("button", { name: /كعميل جديد/ }).click();
-  await page.locator(".party-block input[type=tel]").first().fill("01055555555");
-  await page.getByPlaceholder("اكتب اسم الوسيط أو رقمه").fill("وسيط فرع 1");
-  await page.getByRole("option", { name: /وسيط فرع 1/ }).click();
-  // Every visit now records its result: an inquiry needs no reason.
-  await page.locator(".outcome-tile.is-inquiry").click();
-  await page.getByRole("button", { name: "حفظ الزيارة" }).click();
-  await page.waitForTimeout(2500);
-  check((await page.locator(".notice").allInnerTexts()).some((t) => t.includes("اتسجلت")), "agent records a visit with a broker");
-  await go("العملاء");
-  check((await page.locator("main").innerText()).includes("زائر جديد"), "the visitor became the agent's customer (saved on the server)");
-  // A visit that needs a follow-up: creates the customer, the follow-up and the history.
-  await go("الزيارات");
-  await page.getByRole("button", { name: "تسجيل زيارة" }).click();
-  await page.getByPlaceholder("اكتب اسم العميل أو رقمه").fill("زائر بمتابعة");
-  await page.getByRole("button", { name: /كعميل جديد/ }).click();
-  await page.locator(".party-block input[type=tel]").first().fill("01066666666");
-  await page.getByText("متابعة بعد الزيارة").click();
-  await page.getByText("العميل ده محتاج متابعة").click();
-  await page.locator('input[type="date"]').last().fill("2030-01-15");
-  await page.locator(".outcome-tile.is-inquiry").click();
-  await page.getByRole("button", { name: "حفظ الزيارة" }).click();
-  await page.waitForTimeout(2500);
-  await go("متابعاتي");
-  await page.waitForTimeout(600); // upcoming follow-ups are listed on the page itself now
-  check((await page.locator("main").innerText()).includes("زائر بمتابعة"), "agent's follow-up was saved");
+  // The visits screen was taken off the menu, so the customer comes from the form below.
   // A new customer from the customer form.
   await go("العملاء");
   await page.getByRole("button", { name: /عميل جديد/ }).first().click();
@@ -136,14 +103,14 @@ await as("agentA", async (page, go) => {
 await as("bm1", async (page, go) => {
   await go("العملاء");
   const txt = await page.locator("main").innerText();
-  check(txt.includes("عميل أحمد الخاص") && txt.includes("عميل المدير") && txt.includes("زائر جديد"), "branch manager sees the whole branch");
+  check(txt.includes("عميل أحمد الخاص") && txt.includes("عميل المدير") && txt.includes("عميل من الفورم"), "branch manager sees the whole branch");
   check(!txt.includes("عميل فرع تاني"), "branch manager does not see the other branch");
 });
 
 await as("agentC", async (page, go) => {
   await go("العملاء");
   const txt = await page.locator("main").innerText();
-  check(txt.includes("عميل فرع تاني") && !txt.includes("عميل أحمد الخاص") && !txt.includes("زائر جديد"), "agent in branch 2 sees only their own");
+  check(txt.includes("عميل فرع تاني") && !txt.includes("عميل أحمد الخاص") && !txt.includes("عميل من الفورم"), "agent in branch 2 sees only their own");
 });
 
 await as("gm", async (page, go) => {
@@ -238,6 +205,33 @@ await as("accountant", async (page, go) => {
     entries = (await getDocs(collection(ctx.firestore(), "accountingEntries"))).docs.map((d) => d.data());
   });
   check(entries.length === 1 && entries[0].status === "void" && entries[0].voidReason === "مبلغ غلط" && entries[0].amount === 250, "cancelling keeps the entry, marks it void and records why");
+});
+
+await as("bm1", async (page, go) => {
+  const aside = await page.locator("aside").innerText();
+  check(!aside.includes("الزيارات") && !aside.includes("التقييمات والشكاوى"), "the visits and reviews entries are gone from the menu");
+  await go("جروبات التليجرام");
+  await page.getByRole("button", { name: "جروب جديد" }).click();
+  await page.locator('[role="dialog"] input').first().fill("جروب المبيعات");
+  await page.locator('[role="dialog"] input[dir="ltr"]').fill("https://evil.com/abc");
+  await page.getByRole("button", { name: "حفظ", exact: true }).click();
+  await page.waitForTimeout(800);
+  check((await page.locator('[role="dialog"]').innerText()).includes("لينك تليجرام"), "a non-Telegram link is refused with a message");
+  await page.locator('[role="dialog"] input[dir="ltr"]').fill("t.me/sales_team");
+  await page.getByRole("button", { name: "حفظ", exact: true }).click();
+  await page.waitForTimeout(2000);
+  check((await page.locator("main").innerText()).includes("جروب المبيعات"), "the manager adds a Telegram group");
+  let groups = [];
+  await env.withSecurityRulesDisabled(async (ctx) => { groups = (await getDocs(collection(ctx.firestore(), "telegramGroups"))).docs.map((d) => d.data()); });
+  check(groups.length === 1 && groups[0].link === "https://t.me/sales_team" && groups[0].createdByName === "مدير فرع 1", "the group is stored once with the tidied link");
+});
+
+await as("agentA", async (page, go) => {
+  await go("جروبات التليجرام");
+  const txt = await page.locator("main").innerText();
+  check(txt.includes("جروب المبيعات") && !txt.includes("جروب جديد"), "a salesperson sees the group but cannot add or edit");
+  const href = await page.getByRole("link", { name: /افتح الجروب/ }).first().getAttribute("href");
+  check(href === "https://t.me/sales_team", "the open button points at the Telegram link");
 });
 
 await as("gm", async (page, go) => {

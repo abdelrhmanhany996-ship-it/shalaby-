@@ -681,6 +681,23 @@ export interface TargetSettings {
   paceAware: boolean;
 }
 
+/** A Telegram group the team uses: kept as a directory so everyone finds the right group and link in one place. */
+export interface TelegramGroup {
+  isDemo?: boolean;
+  id: string;
+  name: string;
+  /** Always a checked Telegram link. */
+  link: string;
+  description?: string;
+  /** The branch it is for; missing means the whole company. */
+  branchId?: string;
+  active: boolean;
+  createdAt: string;
+  createdById: string;
+  createdByName: string;
+  updatedAt?: string;
+}
+
 export type AccountEntryType = "income" | "expense";
 export type AccountEntryStatus = "posted" | "void";
 
