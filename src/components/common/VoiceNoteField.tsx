@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Sparkles, Loader2, Undo2 } from "lucide-react";
-import { aiStatus, refineText, transcribeAudio } from "../../lib/aiClient";
+import { aiStatus, refineText, transcribeAudio, voiceStatus } from "../../lib/aiClient";
 
 interface Props {
   value: string;
@@ -40,6 +40,7 @@ export function VoiceNoteField({
   const [seconds, setSeconds] = useState(0);
   const [msg, setMsg] = useState("");
   const [server, setServer] = useState(false);
+  const [aiOn, setAiOn] = useState(false);
   const [before, setBefore] = useState<string | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -50,7 +51,8 @@ export function VoiceNoteField({
   latest.current = value;
 
   useEffect(() => {
-    aiStatus().then((s) => setServer(s === "server"));
+    aiStatus().then((s) => setAiOn(s === "server"));
+    voiceStatus().then(setServer);
     return () => cleanup();
   }, []);
 
@@ -206,7 +208,7 @@ export function VoiceNoteField({
             <Mic size={14} /> تكلّم
           </button>
         )}
-        {server && !hideImprove && value.trim().length > 3 && mode !== "recording" && (
+        {aiOn && !hideImprove && value.trim().length > 3 && mode !== "recording" && (
           <button type="button" className="voice-btn" onClick={improve} disabled={mode === "working"}>
             <Sparkles size={14} /> حسّن النص
           </button>

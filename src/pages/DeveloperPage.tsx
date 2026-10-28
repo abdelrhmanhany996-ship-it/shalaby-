@@ -24,6 +24,8 @@ const DEFAULT_PRICES = { textIn: 0.3, audioIn: 1.0, out: 2.5, egp: 50 };
 const MODE_LABELS: Record<string, string> = {
   agent: "زكي (الشات بالأدوات)",
   weekly: "الملخص الأسبوعي",
+  coach: "خطة اليوم والأهداف",
+  suggest: "اقتراحات المتابعة",
   transcribe: "تحويل الصوت لنص",
   refine: "تحسين النص",
   brief: "ملخص العميل",
@@ -200,7 +202,7 @@ export function DeveloperPage() {
           </div>
         </div>
         <p style={{ margin: "0 6px 8px" }}>
-          <Dot ok={aiOk} /> الذكاء الاصطناعي (<code>api/ai.php</code>): {aiOk === null ? "جاري الفحص…" : aiOk ? "شغّال" : "مش مفعّل (مفتاح Gemini ناقص)"}
+          <Dot ok={aiOk} /> الذكاء الاصطناعي (<code>api/ai.php</code>): {aiOk === null ? "جاري الفحص…" : aiOk ? "شغّال" : "مش مفعّل (مفتاح Claude ناقص)"}
         </p>
         <p style={{ margin: "0 6px 8px" }}>
           <Dot ok={adminOk} /> إعادة تعيين كلمات المرور (<code>api/admin.php</code>): {adminOk === null ? "جاري الفحص…" : adminOk ? "شغّال" : "مش مفعّل (ملف Firebase Admin ناقص)"}
@@ -404,7 +406,7 @@ export function DeveloperPage() {
             <Num label="إخراج ($ لكل مليون)" value={pOut} onChange={setPOut} step={0.05} />
             <Num label="سعر الدولار بالجنيه" value={egp} onChange={setEgp} />
           </div>
-          <p className="table-secondary">الأسعار تقريبية وتتغير حسب النموذج. راجع صفحة أسعار Gemini الرسمية وعدّلها هنا.</p>
+          <p className="table-secondary">الأسعار تقريبية وتتغير حسب النموذج. النماذج هنا مختلطة (Claude لكل شيء، وGemini للصوت فقط)، فالتكلفة تقديرية. راجع صفحات الأسعار الرسمية للمزوّدين وعدّل الأرقام هنا.</p>
         </details>
       </section>
 

@@ -4,6 +4,8 @@ const ENDPOINT = "/api/ai.php";
 
 export type AiStatus = "unknown" | "server" | "none";
 let cached: AiStatus = "unknown";
+/** Voice notes need the separate Gemini key; everything else runs on Claude. */
+let voiceCached: boolean | null = null;
 
 async function authHeader(): Promise<Record<string, string>> {
   try {
@@ -21,10 +23,18 @@ export async function aiStatus(): Promise<AiStatus> {
     const res = await fetch(`${ENDPOINT}?ping=1`, { cache: "no-store" });
     const data = await res.json();
     cached = data?.configured ? "server" : "none";
+    voiceCached = !!data?.voice;
   } catch {
     cached = "none";
+    voiceCached = false;
   }
   return cached;
+}
+
+/** Whether server-side voice transcription (Gemini Flash-Lite) is configured. */
+export async function voiceStatus(): Promise<boolean> {
+  if (voiceCached === null) await aiStatus();
+  return !!voiceCached;
 }
 
 async function call(init: RequestInit): Promise<any> {
@@ -182,4 +192,16 @@ export interface FollowUpSuggestionResult {
 /** Asks the assistant whether this customer or broker deserves a follow-up nobody scheduled. */
 export async function followUpSuggestion(candidate: unknown): Promise<FollowUpSuggestionResult> {
   return call({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "suggest", candidate }) });
+}
+
+export interface DailyPlan {
+  headline: string;
+  items: { leadId: string; priority: number; why: string; evidence: string; action: string; message: string; replies: { if: string; say: string }[] }[];
+  team: { name: string; issue: string; evidence: string; possible_cause: string; suggestion: string }[];
+  limits: string;
+}
+
+/** Today's prioritized follow-up plan and target gaps, from a snapshot of data the user is already allowed to read. */
+export async function dailyPlan(snapshot: unknown): Promise<DailyPlan> {
+  return call({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "coach", snapshot }) });
 }
