@@ -37,6 +37,15 @@ export function PurchaseDetails({ lines, direct, onChange, heading = "تفاصي
         <small className="table-secondary">{hint ?? "اكتب كل صنف اشتراه: الاسم وسعر القطعة والعدد، والإجمالي بيتحسب لوحده. أو اكتب إجمالي الصنف مباشرة. التفاصيل بتساعد شلبي في تحليل العميل والتقارير."}</small>
       </div>
 
+      {lines.length > 0 && (
+        <div className="purchase-line purchase-head" aria-hidden="true">
+          <span>الصنف</span>
+          <span>سعر القطعة</span>
+          <span>العدد</span>
+          <span>الإجمالي</span>
+          <span />
+        </div>
+      )}
       {lines.map((l, i) => {
         const auto = !!(l.price && l.qty);
         return (

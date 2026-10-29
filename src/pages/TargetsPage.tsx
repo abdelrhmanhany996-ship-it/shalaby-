@@ -153,7 +153,7 @@ export function TargetsPage() {
         </p>
       )}
 
-      {sells && card(mine.p, mine.a.amount, "هدفي", mine.p.target ? `${monthLabel(month)} · ${mine.a.purchases} عملية بيع` : `${monthLabel(month)} · لسه ما اتحددلكش هدف للشهر ده`)}
+      {sells && (mine.p.target > 0 || !canView) && card(mine.p, mine.a.amount, "هدفي", mine.p.target ? `${monthLabel(month)} · ${mine.a.purchases} عملية بيع` : `${monthLabel(month)} · لسه ما اتحددلكش هدف للشهر ده`)}
       {sells && !canView && (
         <section className="panel" style={{ marginTop: 20 }}>
           <div className="panel-header">

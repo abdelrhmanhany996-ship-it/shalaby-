@@ -140,44 +140,44 @@ export function QuotesPage() {
                   const until = validUntil(q);
                   return (
                     <tr key={q.id}>
-                      <td dir="ltr">{q.number}</td>
-                      <td>
+                      <td dir="ltr" className="nowrap">{q.number}</td>
+                      <td className="nowrap">
                         {q.date}
-                        {until && <small className="table-secondary" style={{ display: "block" }}>ساري لحد {until}</small>}
+                        {until && <small className="table-secondary" style={{ display: "block" }}>ساري لـ {until}</small>}
                       </td>
-                      <td>
+                      <td className="quote-customer">
                         {q.leadName}
                         <small className="table-secondary" style={{ display: "block" }}>{q.lines.length} صنف</small>
                       </td>
                       {showSeller && <td>{q.agentName ?? "—"}</td>}
-                      <td>{formatMoney(q.total)} ج.م</td>
+                      <td className="nowrap"><strong>{formatMoney(q.total)}</strong> ج.م</td>
                       <td>
                         <span className={`status-pill ${statusClass[q.status]}`}>{quoteStatusNames[q.status]}</span>
                         {q.lostReason && <small className="table-secondary" style={{ display: "block" }}>{q.lostReason}</small>}
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          <button className="btn-secondary" onClick={() => print(q)} aria-label={`طباعة ${q.number}`}>
-                            <Printer size={14} /> طباعة / PDF
-                          </button>
-                          {(q.status === "draft" || q.status === "sent") && (
-                            <button className="btn-secondary" onClick={() => openEdit(q)} aria-label={`تعديل ${q.number}`}>
-                              <Pencil size={14} /> تعديل
-                            </button>
-                          )}
-                          {q.status === "draft" && (
-                            <button className="btn-secondary" onClick={() => run(() => (setQuoteStatus(q.id, "sent"), `اتعلّم العرض ${q.number} إنه اتبعت.`))}>
-                              <Send size={14} /> اتبعت للعميل
-                            </button>
-                          )}
+                        <div className="quote-actions">
                           {(q.status === "draft" || q.status === "sent") && (
                             <button className="btn-primary" onClick={() => run(() => (acceptQuote(q.id), `اتسجّل بيع ${formatMoney(q.total)} ج.م من العرض ${q.number}.`))}>
                               <Check size={14} /> اتقبل: سجّل بيع
                             </button>
                           )}
+                          {q.status === "draft" && (
+                            <button className="btn-secondary" onClick={() => run(() => (setQuoteStatus(q.id, "sent"), `اتعلّم العرض ${q.number} إنه اتبعت.`))}>
+                              <Send size={14} /> اتبعت
+                            </button>
+                          )}
+                          <button className="icon-button" onClick={() => print(q)} aria-label={`طباعة ${q.number}`} title="طباعة / PDF">
+                            <Printer size={16} />
+                          </button>
                           {(q.status === "draft" || q.status === "sent") && (
-                            <button className="btn-secondary" onClick={() => (setLosing(q), setLostReason(""))}>
-                              <X size={14} /> ما اتقبلش
+                            <button className="icon-button" onClick={() => openEdit(q)} aria-label={`تعديل ${q.number}`} title="تعديل">
+                              <Pencil size={16} />
+                            </button>
+                          )}
+                          {(q.status === "draft" || q.status === "sent") && (
+                            <button className="icon-button" onClick={() => (setLosing(q), setLostReason(""))} aria-label={`ما اتقبلش ${q.number}`} title="ما اتقبلش">
+                              <X size={16} />
                             </button>
                           )}
                         </div>

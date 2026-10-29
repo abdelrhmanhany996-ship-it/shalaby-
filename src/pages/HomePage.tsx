@@ -151,6 +151,7 @@ export function HomePage({ setActiveTab, onOpenLead }: Props) {
           )}
         </section>
 
+        {!(own && targetable(effectiveUser) && !canTeam) && (
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -202,6 +203,7 @@ export function HomePage({ setActiveTab, onOpenLead }: Props) {
             </div>
           )}
         </section>
+        )}
       </div>
 
       <section className="panel" style={{ padding: 18 }}>

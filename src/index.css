@@ -2735,3 +2735,44 @@
 .credit.is-dark .credit-by b { color: #e04a52; }
 @keyframes credit-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
 @media (prefers-reduced-motion: reduce) { .credit .credit-dot { animation: none; } }
+
+/* ================= visual polish ================= */
+/* The target bar: a soft glow that stays inside its own space (it used to spill onto the text around it) */
+.target-bar { margin-block: 10px; }
+.target-bar.tb-shine > i { box-shadow: 0 0 7px 0 rgba(54, 212, 107, .5); }
+.target-bar .tb-star { text-shadow: 0 0 3px rgba(255, 201, 40, .85), 0 1px 0 rgba(0,0,0,.2); font-size: 20px; }
+.metric-grid .target-bar, .task-row .target-bar { margin-block: 6px 2px; }
+
+/* The assistant: one soft shadow, never two stacked ones; leave room under the page so it never hides the last rows */
+.zaki-fab { filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .16)); }
+.zaki-fab .zaki-img { filter: none; }
+.zaki-bubble { box-shadow: 0 4px 16px rgba(0, 0, 0, .12); border: 1px solid rgba(0, 0, 0, .05); }
+.workspace-main { padding-bottom: 130px; }
+/* The chat header: the picture sits at the edge and the title always has its own room */
+.zaki-head { min-height: 88px; padding-inline-start: 128px; }
+.zaki-head-art { filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .22)); }
+.zaki-action { background: var(--surface-soft, #f7f5f2); }
+.zaki-action ul { font-size: .82rem; line-height: 1.9; }
+.zaki-action li bdi { font-weight: 600; }
+
+/* Quotes: roomy cells, one clear main action, small icon buttons for the rest */
+.data-table td.nowrap { white-space: nowrap; }
+.data-table td.quote-customer { min-width: 150px; white-space: nowrap; }
+.quote-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.quote-actions .btn-primary, .quote-actions .btn-secondary { min-height: 36px; padding-block: 6px; }
+.quote-actions .icon-button { width: 36px; height: 36px; }
+.purchase-head { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: -2px; }
+@media (max-width: 720px) { .purchase-head { display: none; } }
+
+/* Phones: the open menu sits above the assistant button, and page headings stack (title first, then full-width actions) */
+@media (max-width: 1023px) {
+  .shalaby-sidebar.is-open { z-index: 95; }
+  .sidebar-backdrop { z-index: 90; }
+}
+@media (max-width: 720px) {
+  .page-heading { flex-direction: column; align-items: stretch; gap: 12px; }
+  .page-heading > div:not(:first-child) { display: flex; flex-wrap: wrap; gap: 8px; }
+  .page-heading > div:not(:first-child) > .btn-primary,
+  .page-heading > div:not(:first-child) > .btn-secondary { flex: 1 1 140px; justify-content: center; }
+  .page-heading > .btn-primary, .page-heading > .tab-filter { align-self: stretch; justify-content: center; }
+}

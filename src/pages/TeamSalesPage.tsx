@@ -65,6 +65,7 @@ export function TeamSalesPage() {
   const [preset, setPreset] = useState<Preset>("month");
   const [custom, setCustom] = useState({ from: periods.month(now).from, to: now });
   const [copied, setCopied] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const range = preset === "custom" ? custom : periods[preset](now);
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(range.from) && /^\d{4}-\d{2}-\d{2}$/.test(range.to) && range.from <= range.to;
   const report = useMemo(
@@ -78,6 +79,8 @@ export function TeamSalesPage() {
     return out;
   }, [valid, targetUsers, quotes, range.from, range.to]);
   const alone = isSales(effectiveUser);
+  const idle = report ? report.rows.filter((r) => r.target <= 0 && r.sold <= 0).length : 0;
+  const visibleRows = report ? (showAll ? report.rows : report.rows.filter((r) => r.target > 0 || r.sold > 0)) : [];
 
   const copy = async () => {
     if (!report) return;
@@ -137,7 +140,12 @@ export function TeamSalesPage() {
           <p className="quiet-note" style={{ marginBottom: 10 }}>
             من {range.from} إلى {range.to}. الهدف هنا هو هدف الشهر محسوب على أيام الفترة (الشهر الكامل = الهدف الكامل).
           </p>
-          <SalesReportView rows={report.rows} total={report.total} from={range.from} to={range.to} quotes={quoteBy} />
+          {idle > 0 && (
+            <button className="btn-text no-print" style={{ marginBottom: 8 }} onClick={() => setShowAll(!showAll)}>
+              {showAll ? "إخفاء اللي من غير هدف ولا مبيعات" : `إظهار ${idle} من غير هدف ولا مبيعات`}
+            </button>
+          )}
+          <SalesReportView rows={visibleRows} total={report.total} from={range.from} to={range.to} quotes={quoteBy} />
         </>
       ) : (
         <p className="notice warning" role="alert">

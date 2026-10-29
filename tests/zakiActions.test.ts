@@ -156,3 +156,11 @@ test("performing a confirmed action calls the right operation and says what happ
   performAction(plan(planNote({ customer: "مسعود", note: "ن" }, data())), ctx);
   assert.deepEqual(calls.splice(0), ["accept", "addFollowUp", "done", "updateLead", "timeline"]);
 });
+
+test("numbers typed in Arabic script (phone, dates, times) work like 0-9", () => {
+  const p = planSale({ customer: "عميل جديد", phone: "٠١٠٩٩٩٩٨٨٨٨", items: [{ name: "جهاز", price: 100 }] }, leads, TODAY);
+  assert.ok(p.ok && p.action.newCustomer?.phone === "01099998888");
+  assert.ok(planFollowUp({ customer: "مسعود", date: "٢٠٢٦-١١-٠٢", time: "١١:٣٠", reason: "x" }, data()).ok);
+  assert.ok(planCustomer({ name: "سعيد", phone: "٠١٠٥٥٥٥٥٦٦٦٦" }, leads).ok);
+  assert.equal((resolveCustomer(leads, { phone: "٠١٠١٢٣٤٥٦٧٨" }) as any).lead.id, "l1");
+});

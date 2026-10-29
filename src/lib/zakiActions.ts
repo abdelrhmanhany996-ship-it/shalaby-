@@ -3,6 +3,7 @@ import { defaultTerms, QUOTE_FOLLOWUP_DAYS } from "./quotes";
 import { isSalesCapable } from "./permissions";
 import { cleanLines, describeLine, grandTotal, productsLabel } from "./purchaseLines";
 import { phoneKey } from "./referrals";
+import { toLatinDigits } from "./digits";
 
 /**
  * What Shalaby may do for the user: register a customer and record a sale. The model only PREPARES an action;
@@ -58,6 +59,8 @@ const norm = (s: string) =>
     .replace(/\s+/g, " ")
     .trim();
 const str = (v: unknown, max = 200) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
+/** A phone number, date or time the model passed: digits typed in Arabic script become 0-9. */
+const latin = (v: unknown, max = 30) => { const s = str(v, max); return s ? toLatinDigits(s) : undefined; };
 const money = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 const validPhone = (p: string) => phoneKey(p).length >= 10;
@@ -107,12 +110,17 @@ export function parseItems(raw: unknown): { lines: PurchaseLine[]; problem?: str
   return kept.length ? { lines: kept } : { lines: [], problem: "مفيش أصناف صالحة." };
 }
 
+const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+/** Two short lines per item for the confirmation card: the name, then pieces x price = total. */
+const itemLines = (lines: PurchaseLine[]): string[] =>
+  lines.flatMap((l) => [l.name, `${[l.qty ? `${num(l.qty)} قطعة` : "", l.price ? `× ${num(l.price)}` : ""].filter(Boolean).join(" ")}${l.qty || l.price ? " = " : ""}${num(l.total)} ج.م`]);
+
 let counter = 0;
 const newId = () => `act-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 
 export function planCustomer(args: Args, leads: Lead[]): Plan {
   const name = str(args.name, 120);
-  const phone = str(args.phone, 30);
+  const phone = latin(args.phone);
   if (!name) return { ok: false, result: { status: "need_info", missing: "اسم العميل" } };
   if (!phone || !validPhone(phone)) return { ok: false, result: { status: "need_info", missing: "رقم موبايل العميل (10 أرقام على الأقل)" } };
   const same = resolveCustomer(leads, { phone });
@@ -135,14 +143,15 @@ export function planCustomer(args: Args, leads: Lead[]): Plan {
 export function planSale(args: Args, leads: Lead[], today: string): Plan {
   const items = parseItems(args.items);
   if (items.problem) return { ok: false, result: { status: "need_info", missing: items.problem } };
-  const date = isDate(args.date) ? args.date : today;
+  const dateArg = latin(args.date);
+  const date = isDate(dateArg) ? dateArg : today;
   if (date > today) return { ok: false, result: { status: "invalid", problem: "تاريخ البيع في المستقبل." } };
-  const wanted = { id: str(args.customer_id), name: str(args.customer), phone: str(args.phone, 30) };
+  const wanted = { id: str(args.customer_id), name: str(args.customer), phone: latin(args.phone) };
   const found = resolveCustomer(leads, wanted);
   const note = str(args.note, 300);
   const total = grandTotal(items.lines);
   const base = { id: newId(), kind: "sale" as const, lines: items.lines, total, ...(note ? { note } : {}), date };
-  const lineSummary = items.lines.map(describeLine);
+  const lineSummary = itemLines(items.lines);
   const tail = [`الإجمالي: ${money(total)} ج.م`, ...(date !== today ? [`التاريخ: ${date}`] : []), ...(note ? [`ملاحظة: ${note}`] : [])];
 
   if (found.kind === "ambiguous") return { ok: false, result: { status: "ambiguous_customer", customers: found.leads.map(brief), hint: "اسأل المستخدم يحدد مين فيهم." } };
@@ -203,7 +212,7 @@ const typeNames: Record<FollowUpType, string> = { call: "مكالمة", whatsapp
 const priorityNames: Record<FollowUpPriority, string> = { high: "عالية", normal: "عادية", low: "منخفضة" };
 const openFollowUp = (f: FollowUp) => f.status !== "completed" && f.status !== "cancelled";
 const needInfo = (missing: string): Plan => ({ ok: false, result: { status: "need_info", missing } });
-const customerFrom = (args: Args, leads: Lead[]) => resolveCustomer(leads, { id: str(args.customer_id), name: str(args.customer), phone: str(args.phone, 30) });
+const customerFrom = (args: Args, leads: Lead[]) => resolveCustomer(leads, { id: str(args.customer_id), name: str(args.customer), phone: latin(args.phone) });
 const askWhich = (found: Resolved): Plan | null =>
   found.kind === "ambiguous"
     ? { ok: false, result: { status: "ambiguous_customer", customers: found.leads.map(brief), hint: "اسأل المستخدم يحدد مين فيهم." } }
@@ -234,7 +243,7 @@ export function planQuote(args: Args, d: PlanData): Plan {
       lines: items.lines,
       total,
       quote: { ...(addressedTo ? { addressedTo } : {}), terms, send },
-      summary: [`عرض سعر للعميل ${lead.name}`, ...items.lines.map(describeLine), `الإجمالي: ${money(total)} ج.م`, send ? `هيتعلّم إنه اتبعت وهتتجدول متابعة بعد ${QUOTE_FOLLOWUP_DAYS} أيام (لو مفيش متابعة مفتوحة).` : "هيتحفظ كمسودة (لسه ما اتبعتش)."],
+      summary: [`عرض سعر للعميل ${lead.name}`, ...itemLines(items.lines), `الإجمالي: ${money(total)} ج.م`, send ? `هيتعلّم إنه اتبعت وهتتجدول متابعة بعد ${QUOTE_FOLLOWUP_DAYS} أيام (لو مفيش متابعة مفتوحة).` : "هيتحفظ كمسودة (لسه ما اتبعتش)."],
     },
   };
 }
@@ -273,12 +282,13 @@ export function planFollowUp(args: Args, d: PlanData): Plan {
   const stop = askWhich(found);
   if (stop) return stop;
   const lead = (found as Extract<Resolved, { kind: "found" }>).lead;
-  const date = args.date;
+  const date = latin(args.date);
   if (!isDate(date)) return needInfo("ميعاد المتابعة (التاريخ)");
   if (date < d.today) return { ok: false, result: { status: "invalid", problem: "تاريخ المتابعة فات." } };
   const reason = str(args.reason, 200);
   if (!reason) return needInfo("سبب المتابعة");
-  const time = isTime(args.time) ? args.time : undefined;
+  const timeArg = latin(args.time, 8);
+  const time = isTime(timeArg) ? timeArg : undefined;
   const type = (Object.keys(typeNames) as FollowUpType[]).find((t) => t === args.type) ?? "call";
   const priority = (Object.keys(priorityNames) as FollowUpPriority[]).find((p) => p === args.priority) ?? "normal";
   return {
@@ -314,7 +324,7 @@ export function planFollowUpDone(args: Args, d: PlanData): Plan {
   if (stop) return stop;
   const result = str(args.result, 300);
   if (!result) return needInfo("إيه اللي حصل في المتابعة؟ (النتيجة)");
-  const next = args.next_date;
+  const next = latin(args.next_date);
   if (next !== undefined && next !== null && next !== "" && (!isDate(next) || next < d.today)) return { ok: false, result: { status: "invalid", problem: "ميعاد المتابعة الجاية مش صحيح." } };
   const nextDate = isDate(next) ? next : undefined;
   return {
@@ -334,9 +344,10 @@ export function planFollowUpDone(args: Args, d: PlanData): Plan {
 export function planFollowUpMove(args: Args, d: PlanData, managerOk = false): Plan {
   const { followUp: f, stop } = findFollowUp(args, d, !managerOk);
   if (stop) return stop;
-  const date = args.new_date;
+  const date = latin(args.new_date);
   if (!isDate(date) || date < d.today) return needInfo("الميعاد الجديد (تاريخ مش فايت)");
-  const time = isTime(args.time) ? args.time : undefined;
+  const timeArg = latin(args.time, 8);
+  const time = isTime(timeArg) ? timeArg : undefined;
   const reason = str(args.reason, 200);
   if (!reason) return needInfo("سبب التأجيل");
   const to = time ? `${date}T${time}` : date;

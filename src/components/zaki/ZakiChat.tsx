@@ -24,6 +24,12 @@ const examples = [
   "What should I focus on today?",
 ];
 
+/** Keeps Latin runs (product codes, numbers with × and =) in their own direction so Arabic and English never shuffle each other. */
+const isolate = (text: string): React.ReactNode[] =>
+  text.split(/([A-Za-z][A-Za-z0-9\-\/.+]*(?:\s+[×x]\s*[\d,.]+)?|\d[\d,.]*(?:\s*[×x=+]\s*[\d,.]+)+)/).map((part, i) =>
+    i % 2 ? <bdi key={i} dir="ltr">{part}</bdi> : part,
+  );
+
 const thinkingLines = ["بدوّر في الملفات…", "بحسبها لحظة…", "بجمّع الأرقام…", "قربت أخلّص…"];
 
 const reduced = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -398,7 +404,7 @@ export function ZakiChat() {
       {open && (
         <div className="zaki-panel" role="dialog" aria-label="شلبي، المساعد الذكي">
           <div className="zaki-head">
-            <ZakiAvatar mood={busy ? "thinking" : speaking ? "talking" : mood} size={168} className="zaki-head-art" />
+            <ZakiAvatar mood={busy ? "thinking" : speaking ? "talking" : mood} size={112} className="zaki-head-art" />
             <div>
               <strong>شلبي</strong>
               <small>
@@ -446,7 +452,7 @@ export function ZakiChat() {
                   <div className={`zaki-action is-${t.action.state}`}>
                     <ul>
                       {t.action.summary.map((l, k) => (
-                        <li key={k}>{l}</li>
+                        <li key={k}>{isolate(l)}</li>
                       ))}
                     </ul>
                     {t.action.state === "pending" && pendingId === t.action.id ? (

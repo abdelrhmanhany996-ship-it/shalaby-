@@ -1,7 +1,8 @@
 import type { Booking, Lead, ReviewRequest } from "../types/crm";
 
 /** Digits only, Egyptian mobile numbers reduced to their last ten so 0100… and +20100… match. */
-export const phoneKey = (phone: string) => phone.replace(/\D/g, "").slice(-10);
+import { toLatinDigits } from "./digits";
+export const phoneKey = (phone: string) => toLatinDigits(phone).replace(/\D/g, "").slice(-10);
 export const isReferralPhone = (phone: string) => phoneKey(phone).length >= 10;
 
 export const referralMessage = (referrer: string) =>
