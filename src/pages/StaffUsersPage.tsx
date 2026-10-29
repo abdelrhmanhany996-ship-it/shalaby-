@@ -1,6 +1,8 @@
 import { PageGuide } from "../components/common/PageGuide";
 import { RatingBadge } from "../components/reviews/EmployeeRatings";
 import { employeeRatings } from "../lib/employeeRating";
+import { monthOf, targetId } from "../lib/targets";
+import { formatMoney, today } from "../lib/presentation";
 import { userLimitMessage, userQuota } from "../lib/license";
 import { FilterBar } from "../components/common/FilterBar";
 import { authErrorMessage } from "../context/AuthContext";
@@ -16,10 +18,12 @@ import {
   positionNames,
   positionRoles,
   isDirector,
+  hasPermission,
+  isSalesCapable,
   specialties,
   type Specialty,
 } from "../lib/permissions";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useCRM } from "../context/CRMContext";
 import { useLanguage } from "../context/LanguageContext";
 import { UserRole, User } from "../types/crm";
@@ -62,6 +66,10 @@ export const StaffUsersPage: React.FC = () => {
     reviewRequests,
     followUps,
     license,
+    employeeTargets,
+    targetUsers,
+    setEmployeeTarget,
+    removeEmployeeTarget,
   } = useCRM();
   const uQuota = { ...userQuota(users, license), full: userQuota(users, license).full && effectiveUser.role !== "admin" };
   const ratings = useMemo(() => employeeRatings(users, reviewRequests, followUps), [users, reviewRequests, followUps]);
@@ -105,6 +113,10 @@ export const StaffUsersPage: React.FC = () => {
   const [departmentId, setDepartmentId] = useState("");
   const [jobPositionId, setJobPositionId] = useState("");
   const [directManagerId, setDirectManagerId] = useState("");
+  const [targetMonth, setTargetMonth] = useState(monthOf(today()));
+  const [targetAmount, setTargetAmount] = useState("");
+  // A new employee gets their target once their record has arrived in the list.
+  const [pendingTarget, setPendingTarget] = useState<{ userId: string; month: string; amount: number } | null>(null);
 
 
   // Department & Job Position modal state
@@ -156,6 +168,8 @@ export const StaffUsersPage: React.FC = () => {
     setDepartmentId("");
     setJobPositionId("");
     setDirectManagerId("");
+    setTargetMonth(monthOf(today()));
+    setTargetAmount("");
     setShowAddModal(true);
   };
 
@@ -175,9 +189,50 @@ export const StaffUsersPage: React.FC = () => {
     setDepartmentId(u.departmentId || "");
     setJobPositionId(u.jobPositionId || "");
     setDirectManagerId(u.directManagerId || "");
+    const m = monthOf(today());
+    setTargetMonth(m);
+    setTargetAmount(String(employeeTargets.find((t) => t.id === targetId(u.id, m))?.amount ?? ""));
 
     setShowAddModal(true);
   };
+
+  // Monthly target: for people who sell, set by someone allowed to manage targets (never by the person themself, except the owner).
+  const canSetTarget =
+    hasPermission(effectiveUser, "targets.manage") &&
+    isSalesCapable({ role }) &&
+    (!editingUser || editingUser.id !== effectiveUser.id || isDirector(effectiveUser));
+  const targetFor = (userId: string, month: string) => employeeTargets.find((t) => t.id === targetId(userId, month));
+  const changeTargetMonth = (m: string) => {
+    setTargetMonth(m);
+    if (editingUser) setTargetAmount(String(targetFor(editingUser.id, m)?.amount ?? ""));
+  };
+
+  const saveTarget = (userId: string) => {
+    if (!canSetTarget || !targetMonth) return;
+    const raw = targetAmount.trim();
+    const existing = targetFor(userId, targetMonth);
+    try {
+      if (raw === "") {
+        if (existing) removeEmployeeTarget(userId, targetMonth);
+        return;
+      }
+      const amount = Number(raw);
+      if (existing?.amount === amount) return;
+      setEmployeeTarget(userId, targetMonth, amount);
+    } catch (err) {
+      alert(`تم حفظ الموظف لكن تعذر حفظ الهدف: ${err instanceof Error ? err.message : "خطأ غير معروف"}`);
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingTarget || !targetUsers.some((u) => u.id === pendingTarget.userId)) return;
+    try {
+      setEmployeeTarget(pendingTarget.userId, pendingTarget.month, pendingTarget.amount);
+    } catch (err) {
+      alert(`تم إنشاء الموظف لكن تعذر حفظ الهدف: ${err instanceof Error ? err.message : "خطأ غير معروف"}`);
+    }
+    setPendingTarget(null);
+  }, [pendingTarget, targetUsers, setEmployeeTarget]);
 
   const handleEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,6 +283,7 @@ export const StaffUsersPage: React.FC = () => {
         directManagerId,
         directManagerName: managerObj?.name,
       });
+      saveTarget(editingUser.id);
 
     } else {
       const newUser = addUser({
@@ -263,6 +319,8 @@ export const StaffUsersPage: React.FC = () => {
         active: true,
       });
       loginTargetId = newUser.id;
+      const amount = Number(targetAmount.trim());
+      if (canSetTarget && targetAmount.trim() !== "" && amount > 0 && branchId) setPendingTarget({ userId: newUser.id, month: targetMonth, amount });
 
     }
 
@@ -937,6 +995,42 @@ export const StaffUsersPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {canSetTarget && (
+                <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <h4 className="font-bold text-indigo-600 dark:text-indigo-400">3. التارجت الشهري</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">قيمة التارجت (ج.م)</label>
+                      <input
+                        type="number"
+                        aria-label="قيمة التارجت"
+                        min={0}
+                        step={100}
+                        inputMode="numeric"
+                        value={targetAmount}
+                        onChange={(e) => setTargetAmount(e.target.value)}
+                        placeholder="مثال: 50000 — اتركها فارغة لو مفيش هدف"
+                        className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">الشهر</label>
+                      <input
+                        type="month"
+                        value={targetMonth}
+                        onChange={(e) => changeTargetMonth(e.target.value)}
+                        className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  {editingUser && targetFor(editingUser.id, targetMonth) && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      الهدف الحالي {formatMoney(targetFor(editingUser.id, targetMonth)!.amount)} ج.م · آخر تعديل بواسطة {targetFor(editingUser.id, targetMonth)!.setByName}. التفاصيل والإنجاز في صفحة الأهداف.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
                 <button

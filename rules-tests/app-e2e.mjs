@@ -213,6 +213,22 @@ await as("agentC", async (page, go) => {
   check(!(await page.locator("main").innerText()).includes("10,000"), "another branch's salesperson never sees that target");
 });
 
+// The monthly target can also be set from the employee's edit form.
+await as("gm", async (page, go) => {
+  await page.locator("aside summary", { hasText: "الإدارة" }).click();
+  await go("الموظفون");
+  await page.locator("tr", { hasText: "موظف أ" }).first().getByTitle("تعديل بيانات الموظف").click();
+  const field = page.getByLabel("قيمة التارجت");
+  check((await field.inputValue()) === "10000", "the edit form shows the employee's current monthly target");
+  await field.fill("12000");
+  // the seeded test employee has no phone, which the form requires
+  for (const req of await page.locator("form input[required]").all()) if (!(await req.inputValue())) await req.fill("01000000001");
+  await page.getByRole("button", { name: "حفظ التعديلات" }).click();
+  await page.waitForTimeout(2000);
+  const t = await readDoc(`employeeTargets/tgt-usr-agentA-${month}`);
+  check(t?.amount === 12000 && t?.history?.length === 1, "saving the form updated the target and kept its history");
+});
+
 const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "جروبات التليجرام", "الهيكل الإداري", "الأقسام والفروع"];
 
 await as("gm", async (page) => {
