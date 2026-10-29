@@ -101,8 +101,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
       !selected ||
       !canCompleteFollowUp(effectiveUser, selected) ||
       !result.trim() ||
-      (hasNext && !nextDate) ||
-      (isPostSale(selected) && !rating)
+      (hasNext && !nextDate)
     )
       return;
     const hasReferral = isPostSale(selected) && rating >= REFERRAL_MIN_STARS && !!(referralName.trim() || referralPhone.trim());
@@ -118,7 +117,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
       hasNext ? nextDate : undefined,
       isPostSale(selected)
         ? {
-            satisfactionRating: rating,
+            satisfactionRating: rating || undefined,
             satisfactionComment: ratingComment.trim() || undefined,
             referralNote: [referralName.trim(), referralPhone.trim(), referralNote.trim()].filter(Boolean).join(" · ") || undefined,
           }
@@ -623,7 +622,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
                 <>
                   <div className="field">
                     <span>
-                      رضا العميل عن الشغل <em>مطلوب</em>
+                      رضا العميل عن الشغل <em className="optional-tag">اختياري</em>
                     </span>
                     <div
                       role="radiogroup"

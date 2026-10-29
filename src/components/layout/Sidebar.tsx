@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   Target,
   Send,
+  FileText,
+  BarChart3,
 } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { ShalabyLogo } from "../common/ShalabyLogo";
@@ -30,8 +32,9 @@ export function Sidebar({
   setSidebarOpen,
 }: Props) {
   const { effectiveUser, followUps } = useCRM();
+  // Satisfaction calls after a sale are optional: they stay out of the badge.
   const count = followUps.filter((f) =>
-    ["due", "overdue"].includes(followUpStatus(f)),
+    f.category !== "post_sale" && ["due", "overdue"].includes(followUpStatus(f)),
   ).length;
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -106,6 +109,8 @@ export function Sidebar({
             PhoneCall,
             count,
           )}
+          {nav("quotes", "عروض الأسعار", FileText)}
+          {nav("team_sales", worksOwnCustomers(effectiveUser) && !hasPermission(effectiveUser, "targets.view") ? "مبيعاتي" : "مبيعات الأسبوع", BarChart3)}
           {nav("targets", hasPermission(effectiveUser, "targets.view") ? "الأهداف والأداء" : "هدفي", Target)}
           {nav("telegram", "جروبات التليجرام", Send)}
           {["users", "audit", "permissions", "developer"].some((page) => canAccessPage(effectiveUser, page)) && (

@@ -792,3 +792,37 @@ export interface SalesStatementRows {
   /** The rows as JSON (string[][]): Firestore cannot store a list of lists. */
   rowsJson: string;
 }
+
+export type QuoteStatus = "draft" | "sent" | "accepted" | "lost";
+
+/** A price quote (عرض سعر / بيان بيع) a salesperson prepares for one of their customers. */
+export interface Quote {
+  isDemo?: boolean;
+  id: string;
+  /** Printed number, for example Q-261029-01. */
+  number: string;
+  /** YYYY-MM-DD */
+  date: string;
+  leadId: string;
+  leadName: string;
+  leadPhone: string;
+  /** Who it is addressed to on the paper (the customer's name or company). */
+  addressedTo: string;
+  branchId: string;
+  agentId: string;
+  agentName?: string;
+  /** Typed by hand, same shape as a purchase so accepting a quote carries its lines into the sale as they are. */
+  lines: PurchaseLine[];
+  total: number;
+  /** The bullet notes printed under the table. */
+  terms: string[];
+  status: QuoteStatus;
+  sentAt?: string;
+  /** The follow-up scheduled for this quote (by the system, or the salesperson's own). */
+  followUpId?: string;
+  /** The sale it became. */
+  bookingId?: string;
+  lostReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -59,13 +59,14 @@ const daysBetween = (from: string, to: string) => Math.round((new Date(`${to}T00
  *  - late_today: planned for a time today that has already passed
  *  - soon: planned for a time within the next `soonMinutes`
  *  - today: due today with no time of day (shown, but not an interruption)
- * Only the person the follow-up is assigned to is reminded.
+ * Only the person the follow-up is assigned to is reminded, and never for a post-sale satisfaction call.
  */
 export function pendingReminders(list: FollowUp[], userId: string, today: string, time: string, soonMinutes = 60): FollowUpReminder[] {
   const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
   const out: FollowUpReminder[] = [];
   for (const f of list) {
-    if (!open(f) || f.assignedAgentId !== userId) continue;
+    // Satisfaction calls after a sale are optional and never raise a reminder.
+    if (!open(f) || f.assignedAgentId !== userId || f.category === "post_sale") continue;
     const d = f.scheduledAt.slice(0, 10);
     if (d < today) {
       out.push({ followUp: f, level: "overdue", daysLate: daysBetween(d, today) });

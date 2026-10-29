@@ -17,9 +17,11 @@ import { buildStatement, parseRows, type StatementInput } from "../lib/salesStat
 import { defaultTargetSettings, sanitizeTargetSettings, targetId, withAmount } from "../lib/targets";
 import { defaultAccountingSettings, newEntry, sanitizeAccountingSettings, voided, type EntryInput } from "../lib/accounting";
 import {
-  upcomingPostSale,
+  satisfactionCall,
   addToDate,
 } from "../lib/postSale";
+import { defaultTerms, nextQuoteNumber, priceLines, quoteError, quoteFollowUpDate, quoteFollowUpReason } from "../lib/quotes";
+import { productsLabel } from "../lib/purchaseLines";
 import {
   reasonLabel,
   unknownReasonQuestion,
@@ -50,6 +52,9 @@ import {
   Visit,
   FollowUp,
   FollowUpPriority,
+  PurchaseLine,
+  Quote,
+  QuoteStatus,
   EmployeeTarget,
   TelegramGroup,
   SalesStatement,
@@ -83,6 +88,14 @@ export interface FollowUpExtra {
   satisfactionRating?: number;
   satisfactionComment?: string;
   referralNote?: string;
+}
+
+export interface QuoteInput {
+  leadId: string;
+  addressedTo: string;
+  lines: PurchaseLine[];
+  terms: string[];
+  date?: string;
 }
 
 export interface CRMContextType {
@@ -197,6 +210,14 @@ export interface CRMContextType {
   ) => void;
   addJobPosition: (pos: Omit<JobPosition, "id">) => JobPosition;
   updateJobPosition: (id: string, updates: Partial<JobPosition>) => void;
+
+  // Price quotes
+  quotes: Quote[];
+  /** Creates a quote, or updates one (only while it is a draft or sent). With `send` it is also marked as sent. */
+  saveQuote: (input: QuoteInput, opts?: { id?: string; send?: boolean }) => Quote;
+  setQuoteStatus: (id: string, status: Exclude<QuoteStatus, "accepted">, lostReason?: string) => void;
+  /** The customer accepted: records the sale from the quote's lines and closes the quote as accepted. */
+  acceptQuote: (id: string) => Booking;
 
   // Duplicate Check
   findDuplicateLeadsByPhone: (phone: string, excludeId?: string) => Lead[];
@@ -335,6 +356,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   const [purchaseInvoices, setPurchaseInvoices] = useState<PurchaseInvoice[]>(
     () => loadStorage("purchase_invoices", []),
   );
+  const [quotes, setQuotes] = useState<Quote[]>(() => loadStorage("quotes", []));
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
     loadStorage("notifications", []),
   );
@@ -442,6 +464,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   useFirestoreCollection("visits", visits, setVisits, { scope: scope.visits });
   useFirestoreCollection("followUps", followUps, setFollowUps, { scope: scope.followUps });
   useFirestoreCollection("bookings", bookings, setBookings, { scope: scope.bookings });
+  useFirestoreCollection("quotes", quotes, setQuotes, { scope: scope.quotes });
   useFirestoreCollection("timelineEvents", timelineEvents, setTimelineEvents, { scope: scope.timeline });
   useFirestoreCollection("activityLogs", auditLogs, setAuditLogs, { scope: scope.audit });
   useFirestoreCollection("telegramGroups", telegramGroups, setTelegramGroups, { scope: "all" });
@@ -570,6 +593,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     () => saveStorage("purchase_invoices", purchaseInvoices),
     [purchaseInvoices],
   );
+  useEffect(() => saveStorage("quotes", quotes), [quotes]);
   useEffect(() => saveStorage("notifications", notifications), [notifications]);
   useEffect(() => saveStorage("courses", courses), [courses]);
   useEffect(() => saveStorage("leads", leads), [leads]);
@@ -869,7 +893,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Lead CRUD
   const AUTO_FOLLOWUP_DAYS = 2;
-  const POST_SALE_FOLLOWUPS_OFF = true;
   const addLead = (leadData: Omit<Lead, "id" | "createdAt">, autoFollowUp = true): Lead => {
     const id = `ld-${crypto.randomUUID()}`;
     const branch = branches.find((b) => b.id === leadData.branchId);
@@ -1407,28 +1430,31 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   // Booking Operations
   /** The post-sale follow-ups still ahead for a purchase, with fixed ids so doing it twice can never double them. */
   const postSaleFollowUps = (booking: Booking, have: Set<string | undefined>): FollowUp[] => {
-    // The follow-up system is now one follow-up after registration; purchases no longer schedule post-sale ones.
-    if (POST_SALE_FOLLOWUPS_OFF) return [];
+    // One optional satisfaction call a week after the sale; it never raises a reminder.
+    const call = satisfactionCall(booking.bookingDate);
+    if (have.has(call.milestone) || call.date < today()) return [];
     const lead = leads.find((l) => l.id === booking.leadId);
     const agentId = users.some((u) => u.id === booking.agentId) ? booking.agentId : lead?.assignedAgentId || booking.agentId;
-    return upcomingPostSale(booking.bookingDate, today(), have).map((m) => ({
-      id: `flw-ps-${booking.id}-${m.milestone}`,
-      leadId: booking.leadId,
-      leadName: booking.leadName,
-      leadPhone: booking.leadPhone,
-      assignedAgentId: agentId,
-      assignedAgentName: users.find((u) => u.id === agentId)?.name,
-      branchId: booking.branchId,
-      scheduledAt: m.date,
-      reason: m.reason,
-      type: "call" as const,
-      notes: "",
-      status: (m.date === today() ? "due" : "upcoming") as FollowUp["status"],
-      category: "post_sale" as const,
-      origin: "auto" as const,
-      bookingId: booking.id,
-      milestone: m.milestone,
-    }));
+    return [
+      {
+        id: `flw-ps-${booking.id}-${call.milestone}`,
+        leadId: booking.leadId,
+        leadName: booking.leadName,
+        leadPhone: booking.leadPhone,
+        assignedAgentId: agentId,
+        assignedAgentName: users.find((u) => u.id === agentId)?.name,
+        branchId: booking.branchId,
+        scheduledAt: call.date,
+        reason: call.reason,
+        type: "call" as const,
+        notes: "",
+        status: "upcoming" as FollowUp["status"],
+        category: "post_sale" as const,
+        origin: "auto" as const,
+        bookingId: booking.id,
+        milestone: call.milestone,
+      },
+    ];
   };
 
   const addBooking = (
@@ -1494,6 +1520,120 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
       `إتمام حجز كورس ${bookingData.courseName} للعميل ${bookingData.leadName}`,
     );
     return newBooking;
+  };
+
+  // ---------- price quotes ----------
+  /** Schedules the default follow-up for a sent quote, unless its owner already has an open one for the customer. */
+  const followUpForQuote = (quote: Quote): string | undefined => {
+    const date = quoteFollowUpDate(quote, today(), followUps);
+    if (!date) return undefined;
+    return addFollowUp({
+      leadId: quote.leadId,
+      leadName: quote.leadName,
+      leadPhone: quote.leadPhone,
+      assignedAgentId: quote.agentId,
+      branchId: quote.branchId,
+      origin: "auto",
+      scheduledAt: date,
+      reason: quoteFollowUpReason(quote),
+      type: "call",
+      notes: "",
+    }).id;
+  };
+
+  const saveQuote: CRMContextType["saveQuote"] = (input, opts = {}) => {
+    const lead = leads.find((l) => l.id === input.leadId);
+    const { lines, total } = priceLines(input.lines);
+    const problem = quoteError({ leadId: lead ? lead.id : "", lines });
+    if (problem) throw new Error(problem);
+    const terms = input.terms.map((t) => t.trim()).filter(Boolean).slice(0, 12);
+    const now = new Date().toISOString();
+    const existing = opts.id ? quotes.find((q) => q.id === opts.id) : undefined;
+    if (opts.id && !existing) throw new Error("عرض السعر مش موجود.");
+    if (existing && !["draft", "sent"].includes(existing.status)) throw new Error("عرض السعر اتقفل ومينفعش يتعدل.");
+    const date = input.date || existing?.date || today();
+    const agentId = lead!.assignedAgentId || effectiveUser.id;
+    const base: Quote = existing
+      ? { ...existing, leadName: lead!.name, leadPhone: lead!.phone, addressedTo: input.addressedTo.trim() || lead!.name, lines, total, terms: terms.length ? terms : defaultTerms, date, updatedAt: now }
+      : {
+          id: `qte-${crypto.randomUUID()}`,
+          number: nextQuoteNumber(date, quotes.map((q) => q.number)),
+          date,
+          leadId: lead!.id,
+          leadName: lead!.name,
+          leadPhone: lead!.phone,
+          addressedTo: input.addressedTo.trim() || lead!.name,
+          branchId: lead!.branchId,
+          agentId,
+          agentName: users.find((u) => u.id === agentId)?.name,
+          lines,
+          total,
+          terms: terms.length ? terms : defaultTerms,
+          status: "draft",
+          createdAt: now,
+          updatedAt: now,
+        };
+    let saved = base;
+    if (opts.send && base.status !== "sent") {
+      saved = { ...base, status: "sent", sentAt: now, followUpId: followUpForQuote(base) };
+      addTimelineEvent({
+        leadId: base.leadId,
+        authorId: effectiveUser.id,
+        authorName: effectiveUser.name,
+        type: "note",
+        title: `عرض سعر ${base.number}`,
+        details: `الإجمالي ${total.toLocaleString("en-US")} ج.م${saved.followUpId ? " · اتجدولت متابعة بعد 3 أيام" : ""}`,
+      });
+    }
+    setQuotes((prev) => (existing ? prev.map((q) => (q.id === saved.id ? saved : q)) : [saved, ...prev]));
+    logAudit(existing ? "تعديل عرض سعر" : "إضافة عرض سعر", "عرض سعر", saved.id, `${saved.number} للعميل ${saved.leadName}: ${total.toLocaleString("en-US")} ج.م`);
+    return saved;
+  };
+
+  const setQuoteStatus: CRMContextType["setQuoteStatus"] = (id, status, lostReason) => {
+    const q = quotes.find((x) => x.id === id);
+    if (!q) throw new Error("عرض السعر مش موجود.");
+    if (q.status === "accepted") throw new Error("العرض اتقبل واتسجل بيع، ومينفعش يتغير.");
+    const now = new Date().toISOString();
+    let next: Quote = { ...q, status, updatedAt: now };
+    if (status === "sent" && q.status !== "sent") next = { ...next, sentAt: now, followUpId: followUpForQuote(q) };
+    if (status === "lost") {
+      next = { ...next, lostReason: lostReason?.trim() || undefined };
+      // The follow-up the system made for this quote is no longer needed.
+      if (q.followUpId)
+        setFollowUps((prev) =>
+          prev.map((f) => (f.id === q.followUpId && f.origin === "auto" && !["completed", "cancelled"].includes(f.status) ? { ...f, status: "cancelled" as const } : f)),
+        );
+    }
+    setQuotes((prev) => prev.map((x) => (x.id === id ? next : x)));
+    logAudit("تغيير حالة عرض سعر", "عرض سعر", id, `${q.number}: ${status}`);
+  };
+
+  const acceptQuote: CRMContextType["acceptQuote"] = (id) => {
+    const q = quotes.find((x) => x.id === id);
+    if (!q) throw new Error("عرض السعر مش موجود.");
+    if (q.status === "accepted") throw new Error("العرض ده اتسجل بيع قبل كده.");
+    const lead = leads.find((l) => l.id === q.leadId);
+    const booking = addBooking({
+      leadId: q.leadId,
+      leadName: q.leadName,
+      leadPhone: q.leadPhone,
+      branchId: q.branchId,
+      agentId: q.agentId,
+      department: "general",
+      courseId: "ps-general",
+      courseName: productsLabel(q.lines),
+      lines: q.lines,
+      bookingDate: today(),
+      amount: q.total,
+      departmentAmounts: { general: q.total },
+      bookingStatus: "confirmed",
+      source: lead?.source ?? "other",
+      notes: `من عرض السعر ${q.number}`,
+    });
+    setQuotes((prev) => prev.map((x) => (x.id === id ? { ...x, status: "accepted", bookingId: booking.id, updatedAt: new Date().toISOString() } : x)));
+    logAudit("قبول عرض سعر", "عرض سعر", id, `${q.number} اتحوّل لبيع ${q.total.toLocaleString("en-US")} ج.م`);
+    return booking;
   };
 
   /** Records why a customer has not bought yet; an unknown reason schedules a follow-up question. */
@@ -2079,6 +2219,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
         brokers,
         purchaseInvoices,
         notifications,
+        quotes,
+        saveQuote,
+        setQuoteStatus,
+        acceptQuote,
 
         addPurchaseCategory,
         updatePurchaseCategory,

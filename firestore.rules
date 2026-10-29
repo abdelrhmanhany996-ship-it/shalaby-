@@ -327,6 +327,14 @@ service cloud.firestore {
       allow delete: if isManager() && branchOk(resource.data.branchId);
     }
 
+    // Price quotes: a salesperson's own, a manager's whole scope.
+    match /quotes/{docId} {
+      allow read: if rowOk(resource.data, 'agentId');
+      allow create: if rowOk(request.resource.data, 'agentId');
+      allow update: if rowOk(resource.data, 'agentId') && rowOk(request.resource.data, 'agentId');
+      allow delete: if isManager() && branchOk(resource.data.branchId);
+    }
+
     match /visits/{docId} {
       allow read: if rowOk(resource.data, 'receivedByAgentId');
       allow create: if rowOk(request.resource.data, 'receivedByAgentId');

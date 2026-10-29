@@ -8,6 +8,7 @@ import type {
   FollowUp,
   Booking,
   PurchaseInvoice,
+  Quote,
 } from "../types/crm";
 import { hasPermission as has, isDirector, isSalesCapable, positionRoles } from "./permissions";
 export { isSalesCapable };
@@ -123,6 +124,10 @@ export function visibleBookings(
       )
     : [];
 }
+/** Quotes follow the same rule as sales: a salesperson sees their own, a manager the branches in scope. */
+export function visibleQuotes(user: User, rows: Quote[], branches: Branch[]) {
+  return rows.filter((q) => canSeeBranch(user, q.branchId, branches) && (!isSales(user) || q.agentId === user.id));
+}
 export function visibleInvoices(
   user: User,
   rows: PurchaseInvoice[],
@@ -227,6 +232,8 @@ export function canAccessPage(u: User, page: string) {
   // The top-customers board compares people and branches: it is for management, not for each salesperson.
   if (page === "overview")
     return !isSales(u) && has(u, "bookings.view") && has(u, "customers.view");
+  // Quotes and the weekly sales view: everyone who sells, and management. Each person's data is already scoped to them.
+  if (page === "quotes" || page === "team_sales") return isSalesCapable(u) || isDirector(u);
   // Everyone who sells sees their own target; managers see the team's.
   if (page === "targets") return has(u, "targets.view") || isSalesCapable(u);
   const key: Record<string, Parameters<typeof has>[1]> = {

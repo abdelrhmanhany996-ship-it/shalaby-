@@ -7,6 +7,12 @@ interface Props {
   /** The total typed directly, used while there are no lines. */
   direct: string;
   onChange: (next: { lines: PurchaseLine[]; direct: string }) => void;
+  /** Wording and behaviour for other uses of the same editor (a price quote). */
+  heading?: string;
+  hint?: string;
+  totalLabel?: string;
+  /** Items only: no direct total when there are no lines, and the heading is not marked optional. */
+  itemsOnly?: boolean;
 }
 
 const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -17,7 +23,7 @@ const parse = (v: string) => Math.max(0, parseFloat(v) || 0);
  * pieces) and the line total is worked out, or types the line total directly. Without any items the total is typed
  * on its own. The overall total is always shown last.
  */
-export function PurchaseDetails({ lines, direct, onChange }: Props) {
+export function PurchaseDetails({ lines, direct, onChange, heading = "تفاصيل الشراء", hint, totalLabel = "إجمالي الشراء", itemsOnly = false }: Props) {
   const set = (i: number, patch: Partial<PurchaseLine>) =>
     onChange({ lines: lines.map((l, k) => (k === i ? { ...l, ...patch } : l)), direct });
   const total = lines.length ? grandTotal(lines) : parse(direct);
@@ -26,9 +32,9 @@ export function PurchaseDetails({ lines, direct, onChange }: Props) {
     <div className="purchase-details">
       <div className="field">
         <span>
-          تفاصيل الشراء <em className="optional-tag">اختياري</em>
+          {heading} {!itemsOnly && <em className="optional-tag">اختياري</em>}
         </span>
-        <small className="table-secondary">اكتب كل صنف اشتراه: الاسم وسعر القطعة والعدد، والإجمالي بيتحسب لوحده. أو اكتب إجمالي الصنف مباشرة. التفاصيل بتساعد شلبي في تحليل العميل والتقارير.</small>
+        <small className="table-secondary">{hint ?? "اكتب كل صنف اشتراه: الاسم وسعر القطعة والعدد، والإجمالي بيتحسب لوحده. أو اكتب إجمالي الصنف مباشرة. التفاصيل بتساعد شلبي في تحليل العميل والتقارير."}</small>
       </div>
 
       {lines.map((l, i) => {
@@ -88,7 +94,7 @@ export function PurchaseDetails({ lines, direct, onChange }: Props) {
         أضف صنف
       </button>
 
-      {lines.length === 0 && (
+      {lines.length === 0 && !itemsOnly && (
         <label className="field" style={{ marginTop: 12 }}>
           <span>
             إجمالي الشراء (ج.م) <em>مطلوب</em>
@@ -108,7 +114,7 @@ export function PurchaseDetails({ lines, direct, onChange }: Props) {
       )}
 
       <div className="purchase-total" aria-live="polite">
-        <span>إجمالي الشراء</span>
+        <span>{totalLabel}</span>
         <strong>{fmt(total)} ج.م</strong>
       </div>
     </div>

@@ -54,6 +54,8 @@ const SalesStatementsPage = lazy(() => import("./pages/SalesStatementsPage").the
 const TelegramPage = lazy(() => import("./pages/TelegramPage").then((m) => ({ default: m.TelegramPage })));
 const TargetsPage = lazy(() => import("./pages/TargetsPage").then((m) => ({ default: m.TargetsPage })));
 const AccountsPage = lazy(() => import("./pages/AccountsPage").then((m) => ({ default: m.AccountsPage })));
+const QuotesPage = lazy(() => import("./pages/QuotesPage").then((m) => ({ default: m.QuotesPage })));
+const TeamSalesPage = lazy(() => import("./pages/TeamSalesPage").then((m) => ({ default: m.TeamSalesPage })));
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage").then((m) => ({ default: m.FeedbackPage })));
 
 const AppContent: React.FC = () => {
@@ -193,6 +195,10 @@ const AppContent: React.FC = () => {
             {activeTab === "teams" && <TeamsPage onOpenLead={handleOpenLead} />}
 
             {activeTab === "reports" && <ReportsPage />}
+
+            {activeTab === "quotes" && <QuotesPage />}
+
+            {activeTab === "team_sales" && <TeamSalesPage />}
 
             {activeTab === "targets" && <TargetsPage />}
 

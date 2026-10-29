@@ -37,6 +37,7 @@ before(async () => {
     await setDoc(doc(f, "leads", "L2"), { id: "L2", branchId: "b1", assignedAgentId: userId("agentB"), delegatedTo: [userId("agentA")], name: "B1", phone: "2" });
     await setDoc(doc(f, "leads", "L3"), { id: "L3", branchId: "b2", assignedAgentId: userId("agentC"), name: "C1", phone: "3" });
     await setDoc(doc(f, "followUps", "F1"), { id: "F1", branchId: "b1", assignedAgentId: userId("agentA") });
+    await setDoc(doc(f, "quotes", "Q1"), { id: "Q1", branchId: "b1", agentId: userId("agentA"), status: "sent" });
     await setDoc(doc(f, "users", userId("agentA")), { id: userId("agentA"), branchId: "b1", role: "sales_agent" });
     await setDoc(doc(f, "users", userId("agentC")), { id: userId("agentC"), branchId: "b2", role: "sales_agent" });
     await setDoc(doc(f, "users", userId("dev")), { id: userId("dev"), role: "admin" });
@@ -383,4 +384,20 @@ test("targets for people who cover every branch are stored without a branch; onl
   await assertFails(getDoc(doc(db("agentA"), "employeeTargets", row.id)));
   const own = { ...row, id: `tgt-${userId("gm")}-2026-10`, userId: userId("gm") };
   await assertSucceeds(setDoc(doc(db("gm"), "employeeTargets", own.id), own), "the owner sets their own target");
+});
+
+test("quotes: a salesperson sees and writes only their own, a branch manager the branch, the general sales manager all", async () => {
+  const q = (k, branch = "b1") => query(collection(db(k), "quotes"), where("branchId", "==", branch), where("agentId", "==", userId(k)));
+  await assertSucceeds(getDocs(q("agentA")));
+  await assertSucceeds(getDoc(doc(db("agentA"), "quotes", "Q1")));
+  await assertFails(getDoc(doc(db("agentB"), "quotes", "Q1")));
+  await assertFails(getDocs(query(collection(db("agentA"), "quotes"), where("branchId", "==", "b1"))));
+  await assertSucceeds(setDoc(doc(db("agentA"), "quotes", "Q2"), { id: "Q2", branchId: "b1", agentId: userId("agentA"), status: "draft" }));
+  await assertFails(setDoc(doc(db("agentA"), "quotes", "Q3"), { id: "Q3", branchId: "b1", agentId: userId("agentB"), status: "draft" }));
+  await assertSucceeds(updateDoc(doc(db("agentA"), "quotes", "Q1"), { status: "accepted" }));
+  await assertFails(updateDoc(doc(db("agentB"), "quotes", "Q1"), { status: "lost" }));
+  await assertSucceeds(getDocs(query(collection(db("bm1"), "quotes"), where("branchId", "==", "b1"))));
+  await assertFails(getDocs(query(collection(db("bm1"), "quotes"), where("branchId", "==", "b2"))));
+  await assertSucceeds(getDocs(collection(db("regional"), "quotes")));
+  await assertFails(getDocs(collection(db(null), "quotes")));
 });

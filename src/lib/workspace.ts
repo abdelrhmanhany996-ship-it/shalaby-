@@ -32,6 +32,7 @@ export function createWorkspace(raw: CRMContextType) {
     raw.users,
     raw.teams,
   );
+  const quotes = access.visibleQuotes(actor, raw.quotes ?? [], raw.branches);
   const invoices = access.visibleInvoices(
     actor,
     raw.purchaseInvoices,
@@ -531,6 +532,23 @@ export function createWorkspace(raw: CRMContextType) {
       requireAssignment(data.branchId, data.agentId);
       return raw.addBooking(data);
     }) as CRMContextType["addBooking"],
+    quotes,
+    saveQuote: ((input, opts) => {
+      const lead = findLead(input.leadId);
+      require(access.canEditCustomer(actor, lead));
+      if (opts?.id) require(quotes.some((q) => q.id === opts.id));
+      return raw.saveQuote(input, opts);
+    }) as CRMContextType["saveQuote"],
+    setQuoteStatus: ((id, ...args) => {
+      const q = quotes.find((x) => x.id === id);
+      require(!!q && hasPermission(actor, "customers.edit"));
+      raw.setQuoteStatus(id, ...args);
+    }) as CRMContextType["setQuoteStatus"],
+    acceptQuote: ((id) => {
+      const q = quotes.find((x) => x.id === id);
+      require(!!q && hasPermission(actor, "bookings.create") && (!access.isSales(actor) || q!.agentId === actor.id));
+      return raw.acceptQuote(id);
+    }) as CRMContextType["acceptQuote"],
     notBoughtRecords: raw.notBoughtRecords.filter((r) => leadIds.has(r.leadId)),
     reviewRequests: visibleReviews,
     reviewNotes: (raw.reviewNotes ?? []).filter((n) => visibleReviewIds.has(n.requestId)),

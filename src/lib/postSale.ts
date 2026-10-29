@@ -76,3 +76,11 @@ export function milestoneSpan(m: { days?: number; months?: number }): string {
   const d = m.days ?? 0;
   return d === 7 ? "أسبوع" : d === 30 ? "شهر" : d === 1 ? "يوم" : d === 2 ? "يومين" : `${d} يوم`;
 }
+
+/** One optional satisfaction call this many days after a sale (no reminders, the rating is optional). */
+export const SATISFACTION_DAYS = 7;
+
+export function satisfactionCall(purchaseDate: string) {
+  const m = postSaleMilestones[0];
+  return { milestone: m.id, date: addToDate(purchaseDate, { days: SATISFACTION_DAYS }), reason: "متابعة بعد الشراء: العميل راضي عن الجهاز والتعامل؟ (تسجيل التقييم اختياري)" };
+}
