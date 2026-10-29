@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, X } from "lucide-react";
+import { Check, Send, X } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { aiStatus, runZaki, type ChatTurn } from "../../lib/aiClient";
 import { runTool, toolLabels, type ToolData } from "../../lib/zakiTools";
 import { zakiGuide, zakiToolsFor } from "../../lib/zakiGuide";
 import { hasPermission, isSalesCapable } from "../../lib/permissions";
-import { canAccessPage } from "../../lib/access";
+import { canAccessPage, canCreateCustomer, defaultAgent } from "../../lib/access";
+import { bookingFor, confirmation, planCustomer, planSale, type PendingAction } from "../../lib/zakiActions";
+import { interestNames } from "../common/InterestPicker";
+import { ActionDenied } from "../../lib/actionDenied";
 import { today } from "../../lib/presentation";
 import { VoiceNoteField } from "../common/VoiceNoteField";
 import { ZakiAvatar, type ZakiMood } from "./ZakiAvatar";
@@ -120,7 +123,9 @@ function Rich({ text }: { text: string }) {
 
 /** Zaki: a floating assistant that answers questions about the data the user can see. */
 export function ZakiChat() {
-  const { currentUser, effectiveUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes, employeeTargets, targetSettings, accountEntries, accountingSettings, targetUsers } = useCRM();
+  const { currentUser, effectiveUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes, employeeTargets, targetSettings, accountEntries, accountingSettings, targetUsers, addLead, addBooking, findDuplicateLeadsByPhone } = useCRM();
+  const canWriteCustomer = canCreateCustomer(effectiveUser);
+  const canWriteSale = hasPermission(effectiveUser, "bookings.create") && isSalesCapable(effectiveUser);
   const canTargets = hasPermission(effectiveUser, "targets.view") || isSalesCapable(effectiveUser);
   // The accounts screen was taken out of the simplified CRM, so its tool is not offered either.
   const canAccounts = hasPermission(effectiveUser, "accounts.view") && canAccessPage(effectiveUser, "accounts");
@@ -131,6 +136,10 @@ export function ZakiChat() {
     ...(canTargets ? { employeeTargets, targetSettings, targetUsers } : {}),
     ...(canAccounts ? { accounting: { entries: accountEntries, settings: accountingSettings } } : {}),
   };
+  // The one change Shalaby has prepared and is waiting for the person to confirm (never saved before that).
+  const pendingRef = useRef<{ action: PendingAction; at: number } | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const acting = useRef(false);
   const [steps, setSteps] = useState<string[]>([]);
   // "off" = the server has no Claude key yet: the assistant still opens and says exactly what is missing.
   const [available, setAvailable] = useState<"checking" | "on" | "off">("checking");
@@ -222,10 +231,88 @@ export function ZakiChat() {
     window.setTimeout(() => setMood((m) => (m === "wave" ? "idle" : m)), 2600);
   };
 
+  /** Runs a prepare_* tool: checks and stores the change, saves nothing. */
+  const prepare = (name: string, args: Record<string, unknown>): unknown => {
+    const data = dataRef.current!;
+    if (name === "prepare_customer" && !canWriteCustomer) return { error: "حسابك مش مسموحله يضيف عملاء." };
+    if (name === "prepare_sale" && !canWriteSale) return { error: "حسابك مش مسموحله يسجل مبيعات." };
+    const plan = name === "prepare_customer" ? planCustomer(args, data.leads) : planSale(args, data.leads, data.today);
+    if (!plan.ok) return plan.result;
+    pendingRef.current = { action: plan.action, at: Date.now() };
+    setPendingId(plan.action.id);
+    return { status: "pending_confirmation", summary: plan.action.summary, note: "لسه مفيش حاجة اتسجلت. اعرض الملخص باختصار واسأل المستخدم يأكد." };
+  };
+
+  const setActionState = (id: string, state: "done" | "cancelled" | "failed", extra?: ChatTurn) =>
+    setTurns((t) => [...t.map((x) => (x.action?.id === id ? { ...x, action: { ...x.action, state } } : x)), ...(extra ? [extra] : [])]);
+
+  /** Records the prepared change, as the signed-in person, through the same permission checks as the screens. */
+  const perform = (a: PendingAction): string => {
+    let lead = a.leadId ? dataRef.current!.leads.find((l) => l.id === a.leadId) : undefined;
+    let created = false;
+    if (!lead && a.newCustomer) {
+      if (findDuplicateLeadsByPhone(a.newCustomer.phone).length) throw new Error("رقم الموبايل ده متسجّل قبل كده لعميل. اطلب مني أدور عليه وأسجل له البيع.");
+      const branchId = effectiveUser.branchId || branches[0]?.id || "";
+      const agentId = defaultAgent(users, effectiveUser, branchId);
+      if (!branchId) throw new Error("مش قادر أحدد الفرع للعميل الجديد. سجّله من صفحة العملاء.");
+      lead = addLead({
+        name: a.newCustomer.name,
+        phone: a.newCustomer.phone,
+        whatsappPhone: a.newCustomer.phone,
+        isSameWhatsApp: true,
+        source: "phone_inquiry",
+        customerCategory: "individual",
+        branchId,
+        assignedAgentId: agentId,
+        status: "new",
+        classification: "B",
+        department: "general",
+        interests: ["general"],
+        departmentName: interestNames(["general"]),
+        notes: a.newCustomer.notes ?? "",
+      });
+      created = true;
+    }
+    if (!lead) throw new Error("العميل مش موجود.");
+    if (a.kind === "customer") return `اتسجّل العميل ${lead.name}. وفيه متابعة أولى متجدولة بعد يومين.`;
+    addBooking(bookingFor(lead, a, lead.assignedAgentId || effectiveUser.id));
+    return `${created ? `اتسجّل العميل ${lead.name} و` : ""}اتسجّلت عملية بيع ${lead.name} بإجمالي ${a.total.toLocaleString("en-US")} ج.م.`;
+  };
+
+  /** The person said yes or no to the prepared change (button or a typed "تمام"). */
+  const decide = (yes: boolean) => {
+    const p = pendingRef.current;
+    if (!p || acting.current) return;
+    acting.current = true;
+    pendingRef.current = null;
+    setPendingId(null);
+    const say = (text: string): ChatTurn => ({ role: "assistant", text });
+    try {
+      if (!yes) return setActionState(p.action.id, "cancelled", say("تمام، ما سجلتش حاجة."));
+      if (Date.now() - p.at > 15 * 60_000) return setActionState(p.action.id, "cancelled", say("العملية دي بقالها كتير. قولّي تاني وأجهّزها من جديد."));
+      const text = perform(p.action);
+      setActionState(p.action.id, "done", say(`${text} ✅`));
+      setMood("cheer");
+      window.setTimeout(() => setMood((m) => (m === "cheer" ? "idle" : m)), 2800);
+    } catch (e) {
+      const why = e instanceof ActionDenied || e instanceof Error ? e.message : "حصلت مشكلة.";
+      setActionState(p.action.id, "failed", say(`ما اتسجّلش: ${why}`));
+      setMood("sorry");
+      window.setTimeout(() => setMood("idle"), 3500);
+    } finally {
+      acting.current = false;
+    }
+  };
+
   const send = async (text: string) => {
     const q = text.trim();
     if (!q || busy || available !== "on") return;
     setInput("");
+    const answer = pendingRef.current ? confirmation(q) : null;
+    if (answer) {
+      setTurns((t) => [...t, { role: "user", text: q }]);
+      return decide(answer === "yes");
+    }
     const history = turns;
     setTurns((t) => [...t, { role: "user", text: q }]);
     setBusy(true);
@@ -235,16 +322,26 @@ export function ZakiChat() {
       const { answer, used } = await runZaki({
         question: q,
         history,
-        tools: zakiToolsFor({ targets: canTargets, accounts: canAccounts }),
+        tools: zakiToolsFor({ targets: canTargets, accounts: canAccounts, writeCustomer: canWriteCustomer, writeSale: canWriteSale }),
         guide: zakiGuide,
         today: today(),
         viewer: currentUser.name,
-        execute: (name, args) => runTool(name, args, dataRef.current!),
+        execute: (name, args) => (name === "prepare_customer" || name === "prepare_sale" ? prepare(name, args) : runTool(name, args, dataRef.current!)),
         onStep: (name) => setSteps((s) => [...s, toolLabels[name] ?? name]),
       });
       setTurns((t) => {
         setFreshIdx(t.length + 1);
-        return [...t, { role: "assistant", text: answer, used: [...new Set(used.map((u) => toolLabels[u] ?? u))] }];
+        const prepared = pendingRef.current;
+        const attach = prepared && !t.some((x) => x.action?.id === prepared.action.id) && used.some((u) => u.startsWith("prepare_"));
+        return [
+          ...t,
+          {
+            role: "assistant",
+            text: answer,
+            used: [...new Set(used.map((u) => toolLabels[u] ?? u))],
+            ...(attach ? { action: { id: prepared.action.id, summary: prepared.action.summary, state: "pending" as const } } : {}),
+          },
+        ];
       });
       setSpeaking(true);
       setMood("talking");
@@ -334,6 +431,27 @@ export function ZakiChat() {
             {turns.map((t, i) => (
               <div key={i} className={`zaki-msg ${t.role === "user" ? "me" : "bot"}`}>
                 {t.role === "user" ? <p>{t.text}</p> : <BotAnswer text={t.text} fresh={i === freshIdx} />}
+                {t.action && (
+                  <div className={`zaki-action is-${t.action.state}`}>
+                    <ul>
+                      {t.action.summary.map((l, k) => (
+                        <li key={k}>{l}</li>
+                      ))}
+                    </ul>
+                    {t.action.state === "pending" && pendingId === t.action.id ? (
+                      <div className="zaki-action-buttons">
+                        <button className="btn-primary" onClick={() => decide(true)}>
+                          <Check size={15} /> تمام، سجّل
+                        </button>
+                        <button className="btn-secondary" onClick={() => decide(false)}>
+                          إلغاء
+                        </button>
+                      </div>
+                    ) : (
+                      <small>{t.action.state === "done" ? "اتسجّلت" : t.action.state === "failed" ? "ما اتسجّلتش" : "اتلغت"}</small>
+                    )}
+                  </div>
+                )}
                 {t.used && t.used.length > 0 && <small className="zaki-used">بص على: {t.used.join("، ")}</small>}
               </div>
             ))}

@@ -94,6 +94,8 @@ export interface ChatTurn {
   role: "user" | "assistant";
   text: string;
   used?: string[]; // tools Zaki looked at (display only)
+  /** A prepared change waiting for the person (display only; the app keeps the real one). */
+  action?: { id: string; summary: string[]; state: "pending" | "done" | "cancelled" | "failed" };
 }
 
 type Content = { role: "user" | "model"; parts: Record<string, unknown>[] };

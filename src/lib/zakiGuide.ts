@@ -62,14 +62,51 @@ export const attentionTool = {
 /** Tools for screens that were taken out of the simplified CRM: kept in code, no longer offered to the model. */
 export const retiredTools = new Set(["top_brokers", "get_broker", "feedback", "reviews", "employee_ratings", "referrals"]);
 
+const itemSchema = obj(
+  {
+    name: { type: S, description: "اسم الصنف زي ما قاله المستخدم (النوع والقدرة...)" },
+    qty: { type: "NUMBER", description: "الكمية/العدد (اختياري)" },
+    price: { type: "NUMBER", description: "سعر الوحدة بالجنيه (اختياري لو في total)" },
+    total: { type: "NUMBER", description: "إجمالي الصنف بالجنيه (لو المستخدم قاله كإجمالي)" },
+  },
+  ["name"],
+);
+
+/**
+ * Tools that PREPARE a change. They save nothing: the app shows the person a short summary and only a confirmation
+ * from them (a button or "تمام") records it.
+ */
+export const prepareCustomerTool = {
+  name: "prepare_customer",
+  description: "تجهيز تسجيل عميل جديد (اسم وموبايل وملاحظة). مش بتسجل حاجة: بترجّع ملخص والمستخدم هو اللي بيأكد. استخدمها لما المستخدم يطلب يسجل عميل جديد.",
+  parameters: obj({ name: { type: S, description: "اسم العميل" }, phone: { type: S, description: "موبايل العميل" }, notes: { type: S, description: "ملاحظات (اختياري)" } }, ["name", "phone"]),
+};
+export const prepareSaleTool = {
+  name: "prepare_sale",
+  description: "تجهيز تسجيل عملية بيع لعميل (موجود أو جديد) بالأصناف والأسعار اللي قالها المستخدم. مش بتسجل حاجة: بترجّع ملخص والمستخدم هو اللي بيأكد. لو العميل مش متسجل ابعت phone عشان يتسجل معاها.",
+  parameters: obj(
+    {
+      customer: { type: S, description: "اسم العميل أو جزء منه" },
+      customer_id: { type: S, description: "معرّف العميل لو معروف من أداة تانية" },
+      phone: { type: S, description: "موبايل العميل (مطلوب بس لو العميل جديد)" },
+      items: { type: "ARRAY", description: "الأصناف المباعة", items: itemSchema },
+      date: { type: S, description: "تاريخ البيع YYYY-MM-DD (الافتراضي النهارده)" },
+      note: { type: S, description: "ملاحظة (اختياري)" },
+    },
+    ["items"],
+  ),
+};
+
 /** The tool list for one user: the general tools, plus the ones their permissions open. */
-export const zakiToolsFor = (access: { targets: boolean; accounts: boolean }) => [
+export const zakiToolsFor = (access: { targets: boolean; accounts: boolean; writeCustomer?: boolean; writeSale?: boolean }) => [
   ...zakiTools.filter((t) => !retiredTools.has(t.name)),
   performanceTool,
   attentionTool,
   // Every salesperson may ask about their own target; managers get the team's.
   ...(access.targets ? [targetsTool] : []),
   ...(access.accounts ? [accountingTool] : []),
+  ...(access.writeCustomer ? [prepareCustomerTool] : []),
+  ...(access.writeSale ? [prepareSaleTool] : []),
 ];
 
 /** What Zaki "studied" about the system: the parts, the vocabulary and how to look things up. */
@@ -87,5 +124,6 @@ export const zakiGuide = `
 - لما تحلل أداء موظف: اربط الأرقام ببعض (الهدف، الإنجاز، المتابعات المتأخرة، التأجيل المتكرر، أسباب عدم الشراء). السبب المحتمل قوله بصيغة «ممكن» ووضّح إنه تفسير مش حقيقة، ومتفسرش لو البيانات ما تدعمش.
 - أي توصية تتحط معاها الدليل (الأرقام والتواريخ من الأدوات) وخطوة عملية واحدة واضحة.
 - لو الأداة رجّعت truncated=true قول إن فيه أكتر من اللي اتعرض. لو رجّعت ambiguous اسأل المستخدم يحدد مين المقصود. لو البيانات مش كفاية قول إيه اللي ناقص بالظبط.
+- التسجيل (تسجيل عميل أو عملية بيع): ممنوع تقول إنك سجّلت حاجة. استخدم prepare_customer أو prepare_sale بس؛ دول بيجهّزوا العملية ومبيسجلوهاش. المستخدم هو اللي بيأكد بزرار أو بكلمة «تمام». لما الأداة ترجّع pending_confirmation: اكتب ملخص قصير جدًا باللي هيتسجل (من summary) واسأل «أسجلها؟». لو رجّعت need_info أو customer_not_found أو ambiguous_customer: اسأل المستخدم عن الناقص بس. الأصناف والأسعار والكميات من كلام المستخدم حرفيًا ومتخمّنش أي رقم. عملية واحدة في المرة.
 - اللغة: رد بنفس لغة المستخدم. لو كتب إنجليزي رد إنجليزي، وإلا بالعامية المصرية المهذبة.
 `;

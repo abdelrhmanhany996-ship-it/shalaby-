@@ -567,6 +567,8 @@ export const toolLabels: Record<string, string> = {
   referrals: "بشوف الترشيحات",
   employee_targets: "بقارن الأهداف بالإنجاز",
   accounting: "بقلّب في الحسابات",
+  prepare_customer: "بجهّز تسجيل العميل",
+  prepare_sale: "بجهّز عملية البيع",
 };
 
 export const defaultToolDate = (daysAgo: number, today: string) => addToDate(today, { days: -daysAgo });

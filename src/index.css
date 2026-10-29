@@ -2240,6 +2240,11 @@
   .zaki-panel { left: 8px; right: 8px; bottom: 72px; width: auto; height: min(560px, calc(100vh - 96px)); }
 }
 
+.zaki-action { margin-top: .6rem; padding: .6rem .75rem; border: 1px solid var(--line, #d9d9d9); border-radius: .6rem; background: rgba(255,255,255,.6); }
+.zaki-action ul { margin: 0 0 .5rem; padding: 0 1rem 0 0; font-size: .8rem; line-height: 1.7; }
+.zaki-action-buttons { display: flex; gap: .4rem; flex-wrap: wrap; }
+.zaki-action.is-done { border-color: var(--buy, #2e8b57); }
+.zaki-action.is-cancelled, .zaki-action.is-failed { opacity: .65; }
 .zaki-used { display: block; margin-top: .4rem; font-size: .68rem; opacity: .65; }
 
 .account-panel .password-button {
