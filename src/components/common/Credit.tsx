@@ -12,7 +12,9 @@ export function Credit({ tone = "app", className = "" }: Props) {
         <i className="credit-dot" aria-hidden="true" />
         Developed by <b>SABER GROUP</b>
       </span>
-      <small>© {new Date().getFullYear()} SABER GROUP. جميع الحقوق محفوظة.</small>
+      <small>
+        <bdi dir="ltr">© {new Date().getFullYear()} SABER GROUP</bdi> · جميع الحقوق محفوظة
+      </small>
     </div>
   );
 }
