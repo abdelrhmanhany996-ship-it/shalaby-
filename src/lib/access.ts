@@ -212,7 +212,7 @@ export const canEditStaff = (actor: User, target: User, branches: Branch[]) =>
  */
 export const retiredPages = new Set([
   "visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports",
-  "accounts", "telegram", "branches", "dept_dashboard", "teams", "analytics_dashboard", "developer",
+  "accounts", "telegram", "branches", "dept_dashboard", "teams", "analytics_dashboard", "developer", "permissions",
 ]);
 
 export function canAccessPage(u: User, page: string) {
@@ -220,6 +220,8 @@ export function canAccessPage(u: User, page: string) {
   // The Telegram groups directory is for everyone; only managers change it.
   if (["dashboard", "analytics_dashboard", "settings", "telegram"].includes(page))
     return true;
+  // Sales statements: everyone who sells or manages sales uploads them; each person sees their own, managers their branches.
+  if (page === "sales_statements") return isSalesCapable(u) || isDirector(u) || u.role === "supervisor";
   if (page === "permissions") return isDirector(u);
   if (page === "developer") return u.role === "admin";
   // The top-customers board compares people and branches: it is for management, not for each salesperson.

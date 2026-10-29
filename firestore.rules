@@ -241,6 +241,36 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Sales statements (بيان بيع): uploaded Excel files. Each person uploads into their own branches and reads their own;
+    // managers read their branches. Nobody edits one: a wrong file is deleted (by its uploader or a manager) and uploaded again.
+    function statementOk(d) {
+      return d.uploadedById == profile().userId
+        && d.branchId is string
+        && branchOk(d.branchId);
+    }
+    match /salesStatements/{docId} {
+      allow read: if rowOk(resource.data, 'uploadedById');
+      allow create: if isStaff() && statementOk(request.resource.data)
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 2
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.headers is list
+        && request.resource.data.headers.size() <= 60
+        && request.resource.data.rowCount is int;
+      allow update: if false;
+      allow delete: if isStaff() && branchOk(resource.data.branchId)
+        && (resource.data.uploadedById == profile().userId || isManager());
+    }
+    match /salesStatementRows/{docId} {
+      allow read: if rowOk(resource.data, 'uploadedById');
+      allow create: if isStaff() && statementOk(request.resource.data)
+        && request.resource.data.rowsJson is string
+        && request.resource.data.rowsJson.size() <= 950000;
+      allow update: if false;
+      allow delete: if isStaff() && branchOk(resource.data.branchId)
+        && (resource.data.uploadedById == profile().userId || isManager());
+    }
+
     // The Telegram groups directory: every staff member reads it, managers keep it, and links must be real Telegram links.
     match /telegramGroups/{docId} {
       allow read: if isStaff();

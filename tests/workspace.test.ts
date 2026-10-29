@@ -121,7 +121,7 @@ test("director monitors all branches with no operational customer actions by def
   const { view, calls } = fixture(director);
   assert.equal(view.leads.length, seed.initialLeads.length);
   assert.equal(view.branches.length, seed.initialBranches.length);
-  assert.ok(canAccessPage(view.effectiveUser, "permissions"));
+  assert.ok(!canAccessPage(view.effectiveUser, "permissions"), "the permissions matrix screen is retired");
   assert.equal(canAccessPage(view.effectiveUser, "add_client"), false);
   assert.throws(() =>
     view.updateLead(view.leads[0].id, { status: "contacted" }),

@@ -750,3 +750,30 @@ export interface AccountingSettings {
   accounts: AccountDef[];
   categories: AccountCategoryDef[];
 }
+
+/** An uploaded sales statement (بيان بيع): the file's details and totals. The rows live in salesStatementRows/{id}. */
+export interface SalesStatement {
+  id: string;
+  title: string;
+  fileName: string;
+  sheetName: string;
+  branchId: string;
+  branchName?: string;
+  /** The month it covers (YYYY-MM), when given. */
+  month?: string;
+  note?: string;
+  headers: string[];
+  rowCount: number;
+  totals: { column: string; sum: number }[];
+  uploadedById: string;
+  uploadedByName: string;
+  createdAt: string;
+}
+
+export interface SalesStatementRows {
+  id: string;
+  branchId: string;
+  uploadedById: string;
+  /** The rows as JSON (string[][]): Firestore cannot store a list of lists. */
+  rowsJson: string;
+}

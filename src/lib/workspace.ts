@@ -430,6 +430,19 @@ export function createWorkspace(raw: CRMContextType) {
       requireAssignment(data.branchId, data.assignedAgentId);
       return raw.addFollowUp(data);
     }) as CRMContextType["addFollowUp"],
+    // Sales statements: uploaded into a branch the person works in; removed by whoever uploaded it or a manager over that branch.
+    salesStatements: (raw.salesStatements ?? []).filter(
+      (s) => access.canSeeBranch(actor, s.branchId, raw.branches) && (s.uploadedById === actor.id || !["sales_agent", "team_leader"].includes(actor.role)),
+    ),
+    addSalesStatement: (async (input) => {
+      require(access.canAccessPage(actor, "sales_statements") && access.canSeeBranch(actor, input.branchId, raw.branches));
+      return raw.addSalesStatement(input);
+    }) as CRMContextType["addSalesStatement"],
+    removeSalesStatement: (async (id) => {
+      const s = (raw.salesStatements ?? []).find((x) => x.id === id);
+      require(!!s && access.canSeeBranch(actor, s.branchId, raw.branches) && (s.uploadedById === actor.id || ["admin", "general_manager", "regional_manager", "branch_manager"].includes(actor.role)));
+      return raw.removeSalesStatement(id);
+    }) as CRMContextType["removeSalesStatement"],
     // Telegram groups: everyone reads the directory; only people who manage it change it.
     addTelegramGroup: ((input) => {
       require(hasPermission(actor, "telegram.manage"));

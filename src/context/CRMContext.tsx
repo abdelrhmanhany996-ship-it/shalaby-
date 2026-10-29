@@ -13,6 +13,7 @@ import { egyptGovernorates, findEgyptGovernorate } from "../data/egypt";
 import { today, followUpStatus, statusNames, sourceNames, followUpTypeNames } from "../lib/presentation";
 import { rescheduled } from "../lib/followUps";
 import { edited as editedGroup, newGroup } from "../lib/telegram";
+import { buildStatement, parseRows, type StatementInput } from "../lib/salesStatements";
 import { defaultTargetSettings, sanitizeTargetSettings, targetId, withAmount } from "../lib/targets";
 import { defaultAccountingSettings, newEntry, sanitizeAccountingSettings, voided, type EntryInput } from "../lib/accounting";
 import {
@@ -51,6 +52,7 @@ import {
   FollowUpPriority,
   EmployeeTarget,
   TelegramGroup,
+  SalesStatement,
   TargetSettings,
   AccountEntry,
   AccountingSettings,
@@ -224,6 +226,10 @@ export interface CRMContextType {
   ) => void;
 
   telegramGroups: TelegramGroup[];
+  salesStatements: SalesStatement[];
+  addSalesStatement: (input: StatementInput) => Promise<SalesStatement>;
+  loadSalesStatementRows: (id: string) => Promise<string[][]>;
+  removeSalesStatement: (id: string) => Promise<void>;
   addTelegramGroup: (input: { name: string; link: string; description?: string; branchId?: string }) => TelegramGroup;
   updateTelegramGroup: (id: string, input: { name: string; link: string; description?: string; branchId?: string }) => void;
   setTelegramGroupActive: (id: string, active: boolean) => void;
@@ -342,6 +348,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   const [reminderDone, setReminderDone] = useState<ReminderDone[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[]>([]);
   const [telegramGroups, setTelegramGroups] = useState<TelegramGroup[]>([]);
+  const [salesStatements, setSalesStatements] = useState<SalesStatement[]>([]);
   const [employeeTargets, setEmployeeTargets] = useState<EmployeeTarget[]>([]);
   const [targetSettings, setTargetSettings] = useState<TargetSettings>(defaultTargetSettings);
   const [accountEntries, setAccountEntries] = useState<AccountEntry[]>([]);
@@ -438,6 +445,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   useFirestoreCollection("timelineEvents", timelineEvents, setTimelineEvents, { scope: scope.timeline });
   useFirestoreCollection("activityLogs", auditLogs, setAuditLogs, { scope: scope.audit });
   useFirestoreCollection("telegramGroups", telegramGroups, setTelegramGroups, { scope: "all" });
+  useFirestoreCollection("salesStatements", salesStatements, setSalesStatements, { scope: scope.salesStatements });
   useFirestoreCollection("employeeTargets", employeeTargets, setEmployeeTargets, { scope: scope.employeeTargets });
   useFirestoreCollection("accountingEntries", accountEntries, setAccountEntries, { scope: scope.accounting });
   const targetsWriter = !!authForScope && ["admin", "general_manager", "regional_manager"].includes(authForScope.role);
@@ -1280,6 +1288,23 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     logAudit("تعديل متابعة", "متابعة", id, `تعديل متابعة ${original.leadName}${clean.priority ? ` (الأولوية: ${clean.priority})` : ""}`);
   };
 
+  // Sales statements: the rows are written first, so a listed statement always has its rows.
+  const addSalesStatement = async (input: StatementInput): Promise<SalesStatement> => {
+    const { statement, rows } = buildStatement(input, `ss-${crypto.randomUUID()}`, { id: effectiveUser.id, name: effectiveUser.name }, new Date().toISOString());
+    await setDoc(doc(db, "salesStatementRows", rows.id), rows);
+    setSalesStatements((prev) => [statement, ...prev]);
+    logAudit("رفع بيان بيع", "بيان بيع", statement.id, `${statement.title} · ${statement.rowCount} صف`);
+    return statement;
+  };
+  const loadSalesStatementRows = async (id: string) => parseRows((await getDoc(doc(db, "salesStatementRows", id))).data() as { rowsJson: string } | undefined);
+  const removeSalesStatement = async (id: string) => {
+    const s = salesStatements.find((x) => x.id === id);
+    if (!s) return;
+    await deleteDoc(doc(db, "salesStatementRows", id));
+    setSalesStatements((prev) => prev.filter((x) => x.id !== id));
+    logAudit("حذف بيان بيع", "بيان بيع", id, s.title);
+  };
+
   // Telegram groups directory
   const addTelegramGroup = (input: { name: string; link: string; description?: string; branchId?: string }): TelegramGroup => {
     const g = newGroup(input, `tg-${crypto.randomUUID()}`, { id: effectiveUser.id, name: effectiveUser.name }, new Date().toISOString());
@@ -2061,6 +2086,10 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
         rescheduleFollowUp,
         updateFollowUpDetails,
         telegramGroups,
+        salesStatements,
+        addSalesStatement,
+        loadSalesStatementRows,
+        removeSalesStatement,
         addTelegramGroup,
         updateTelegramGroup,
         setTelegramGroupActive,

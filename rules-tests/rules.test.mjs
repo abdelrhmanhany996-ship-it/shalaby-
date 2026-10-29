@@ -341,3 +341,35 @@ test("telegram groups: every staff member reads, only managers write, links must
   await assertFails(import("firebase/firestore").then((m) => m.deleteDoc(doc(db("agentA"), "telegramGroups", "R1"))));
   await assertSucceeds(import("firebase/firestore").then((m) => m.deleteDoc(doc(db("bm1"), "telegramGroups", "R1"))));
 });
+
+const statement = (by, branch = "b1", over = {}) => ({ id: "S", title: "بيان أكتوبر", fileName: "a.xlsx", sheetName: "S", branchId: branch, headers: ["العميل", "المبلغ"], rowCount: 1, totals: [], uploadedById: userId(by), uploadedByName: by, createdAt: "t", ...over });
+const statementRows = (by, branch = "b1", over = {}) => ({ id: "S", branchId: branch, uploadedById: userId(by), rowsJson: '[["أحمد","100"]]', ...over });
+
+test("sales statements: uploaded into your own branch as yourself; salespeople read their own, managers their branches", async () => {
+  const { deleteDoc } = await import("firebase/firestore");
+  for (const col of ["salesStatements", "salesStatementRows"]) {
+    const make = col === "salesStatements" ? statement : statementRows;
+    await assertSucceeds(setDoc(doc(db("agentA"), col, "A1"), make("agentA")));
+    await assertFails(setDoc(doc(db("agentA"), col, "A2"), make("agentA", "b2")), "not into another branch");
+    await assertFails(setDoc(doc(db("agentA"), col, "A3"), make("agentB")), "not in someone else's name");
+    await assertFails(setDoc(doc(db("gone"), col, "A4"), make("gone")));
+    await assertFails(setDoc(doc(db(null), col, "A5"), make("agentA")));
+    await assertSucceeds(setDoc(doc(db("bm1"), col, "M1"), make("bm1")));
+    await assertSucceeds(setDoc(doc(db("gm"), col, "G1"), make("gm", "b2")));
+    await assertSucceeds(getDoc(doc(db("agentA"), col, "A1")));
+    await assertFails(getDoc(doc(db("agentB"), col, "A1")), "a colleague does not read it");
+    await assertFails(getDoc(doc(db("agentC"), col, "A1")), "another branch does not read it");
+    await assertSucceeds(getDoc(doc(db("bm1"), col, "A1")), "the branch manager reads it");
+    await assertSucceeds(getDoc(doc(db("gm"), col, "A1")));
+    await assertFails(getDoc(doc(db("bm1"), col, "G1")), "not the other branch");
+    await assertFails(updateDoc(doc(db("agentA"), col, "A1"), { branchId: "b1" }), "nobody edits a statement");
+    await assertFails(deleteDoc(doc(db("agentB"), col, "A1")));
+    await assertFails(deleteDoc(doc(db("bm1"), col, "G1")));
+    await assertSucceeds(deleteDoc(doc(db("bm1"), col, "A1")), "the branch manager removes a wrong file");
+    await assertFails(deleteDoc(doc(db("agentA"), col, "M1")), "a salesperson does not remove the manager's file");
+  }
+  await assertFails(setDoc(doc(db("agentA"), "salesStatements", "T1"), statement("agentA", "b1", { title: "ا" })));
+  await assertFails(setDoc(doc(db("agentA"), "salesStatementRows", "T2"), statementRows("agentA", "b1", { rowsJson: "x".repeat(950001) })));
+  await assertSucceeds(setDoc(doc(db("agentA"), "salesStatements", "O1"), statement("agentA")));
+  await assertSucceeds(deleteDoc(doc(db("agentA"), "salesStatements", "O1")), "the uploader removes their own");
+});

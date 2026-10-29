@@ -6,6 +6,7 @@ import { extname, join } from "node:path";
 import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { chromium } from "playwright-core";
+import { makeXlsx } from "./xlsx-fixture.mjs";
 
 const DIST = process.env.APP_DIST;
 const PROJECT = "shalaby-group";
@@ -229,7 +230,47 @@ await as("gm", async (page, go) => {
   check(t?.amount === 12000 && t?.history?.length === 1, "saving the form updated the target and kept its history");
 });
 
-const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "جروبات التليجرام", "الهيكل الإداري", "الأقسام والفروع"];
+// بيان بيع: a salesperson uploads an Excel file; the branch manager sees it, another branch does not.
+await as("agentA", async (page, go) => {
+  await go("بيان بيع");
+  const xlsx = makeXlsx([["مؤسسة شلبي"], ["العميل", "المبلغ", "رقم الفاتورة"], ["عميل 1", 1200, 501], ["عميل 2", 800.5, 502]]);
+  await page.locator('input[type="file"]').setInputFiles({ name: "october.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: xlsx });
+  const dialog = page.getByRole("dialog", { name: "رفع بيان بيع" });
+  await dialog.waitFor({ timeout: 5000 });
+  check((await dialog.innerText()).includes("عميل 2"), "the upload shows a preview of the Excel rows");
+  await dialog.getByRole("button", { name: "رفع البيان" }).click();
+  await page.waitForTimeout(2000);
+  let docs = [];
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    docs = (await getDocs(collection(ctx.firestore(), "salesStatements"))).docs.map((d) => d.data());
+  });
+  const s = docs.find((d) => d.fileName === "october.xlsx");
+  check(!!s && s.rowCount === 2 && s.branchId === "b1" && s.uploadedById === "usr-agentA", "the statement was saved for the salesperson's branch");
+  check(JSON.stringify(s?.totals) === JSON.stringify([{ column: "المبلغ", sum: 2000.5 }]), "the amount column was totalled (and the invoice numbers were not)");
+  const rows = s && (await readDoc(`salesStatementRows/${s.id}`));
+  check(rows?.rowsJson?.includes("عميل 1"), "the rows were stored");
+  await page.getByRole("button", { name: "عرض october" }).click();
+  const view = page.getByRole("dialog", { name: "october" });
+  await view.getByText("عميل 2").waitFor({ timeout: 5000 });
+  check((await view.innerText()).includes("2,000.5"), "the viewer shows the rows and the total");
+  if (process.env.SHOTS) {
+    await page.screenshot({ path: `${process.env.SHOTS}/statement-view.png` });
+    await view.getByRole("button", { name: "إغلاق" }).click();
+    await page.screenshot({ path: `${process.env.SHOTS}/statements.png` });
+  }
+});
+
+await as("bm1", async (page, go) => {
+  await go("بيان بيع");
+  check((await page.locator("main").innerText()).includes("october"), "the branch manager sees the salesperson's statement");
+});
+
+await as("agentC", async (page, go) => {
+  await go("بيان بيع");
+  check(!(await page.locator("main").innerText()).includes("october"), "another branch's salesperson does not see it");
+});
+
+const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "جروبات التليجرام", "الهيكل الإداري", "الأقسام والفروع", "مصفوفة الصلاحيات", "قسم المطورين"];
 
 await as("gm", async (page) => {
   const aside = await page.locator("aside").textContent();

@@ -2607,3 +2607,31 @@
 .zaki-fab-label.is-ai { letter-spacing: .02em; }
 .zaki-setup { padding: 18px; font-size: 13px; line-height: 1.8; }
 .zaki-setup code { direction: ltr; unicode-bidi: embed; }
+
+/* Sales statements (بيان بيع) */
+.statement-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 26px 16px;
+  margin-bottom: 16px;
+  border: 1.5px dashed var(--line);
+  text-align: center;
+  cursor: pointer;
+  color: var(--muted);
+  transition: border-color 0.15s, background 0.15s;
+}
+.statement-drop strong { color: var(--ink); font-weight: 600; }
+.statement-drop:hover, .statement-drop:focus-visible, .statement-drop.is-drag {
+  border-color: var(--brand);
+  background: var(--surface-soft);
+  outline: none;
+}
+.statement-preview { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+.statement-preview td { padding: 8px 12px; white-space: nowrap; }
+.statement-preview tr.is-head td { background: var(--surface-soft); font-weight: 600; }
+.statement-totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.statement-totals .metric { padding: 12px 14px; }
+.statement-totals .metric-value { font-size: 18px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

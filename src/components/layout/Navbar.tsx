@@ -50,6 +50,7 @@ const titles: Record<string, string> = {
   audit: "سجل العمليات",
   targets: "الأهداف",
   telegram: "جروبات التليجرام",
+  sales_statements: "بيان بيع",
   accounts: "الحسابات",
   settings: "الإعدادات",
 };
