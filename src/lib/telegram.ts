@@ -24,13 +24,20 @@ export interface GroupInput {
   link: string;
   description?: string;
   branchId?: string;
+  /** The bot's chat for this group; null unlinks it. */
+  chatId?: string | null;
+  chatTitle?: string;
 }
+
+const CHAT_ID = /^-?\d{3,20}$/;
 
 export function newGroup(input: GroupInput, id: string, by: { id: string; name: string }, now: string): TelegramGroup {
   const name = input.name.trim();
   if (name.length < 2 || name.length > 80) throw new Error("اكتب اسم الجروب (من حرفين لـ 80).");
-  const link = normalizeTelegramLink(input.link);
-  if (!link) throw new Error("اللينك لازم يكون لينك تليجرام (t.me/… أو @اسم).");
+  const chatId = input.chatId && CHAT_ID.test(input.chatId) ? input.chatId : undefined;
+  if (input.chatId && !chatId) throw new Error("الشات ده مش صحيح.");
+  const link = input.link.trim() ? normalizeTelegramLink(input.link) : chatId ? "" : null;
+  if (link === null) throw new Error("اللينك لازم يكون لينك تليجرام (t.me/… أو @اسم).");
   const description = input.description?.trim().slice(0, 300);
   return {
     id,
@@ -38,6 +45,7 @@ export function newGroup(input: GroupInput, id: string, by: { id: string; name: 
     link,
     ...(description ? { description } : {}),
     ...(input.branchId ? { branchId: input.branchId } : {}),
+    ...(chatId ? { chatId, ...(input.chatTitle ? { chatTitle: input.chatTitle.slice(0, 120) } : {}) } : {}),
     active: true,
     createdAt: now,
     createdById: by.id,
@@ -47,8 +55,10 @@ export function newGroup(input: GroupInput, id: string, by: { id: string; name: 
 
 /** The group with the edited fields; the link is checked again. */
 export function edited(group: TelegramGroup, input: GroupInput, now: string): TelegramGroup {
-  const next = newGroup(input, group.id, { id: group.createdById, name: group.createdByName }, group.createdAt);
-  return { ...group, name: next.name, link: next.link, description: next.description, branchId: next.branchId, updatedAt: now };
+  // The chat link is kept unless the input changes it (undefined keeps, null unlinks).
+  const chat = input.chatId === undefined ? { chatId: group.chatId, chatTitle: group.chatTitle } : { chatId: input.chatId ?? undefined, chatTitle: input.chatId ? input.chatTitle : undefined };
+  const next = newGroup({ ...input, chatId: chat.chatId, chatTitle: chat.chatTitle }, group.id, { id: group.createdById, name: group.createdByName }, group.createdAt);
+  return { ...group, name: next.name, link: next.link, description: next.description, branchId: next.branchId, chatId: next.chatId, chatTitle: next.chatTitle, updatedAt: now };
 }
 
 export function filterGroups(groups: TelegramGroup[], q: string, branchId: string): TelegramGroup[] {

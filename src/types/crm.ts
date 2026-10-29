@@ -686,8 +686,11 @@ export interface TelegramGroup {
   isDemo?: boolean;
   id: string;
   name: string;
-  /** Always a checked Telegram link. */
+  /** A checked Telegram link; may be empty when the group is linked to its chat through the bot. */
   link: string;
+  /** The Telegram chat the CRM bot mirrors for this group (set when a manager links it). */
+  chatId?: string;
+  chatTitle?: string;
   description?: string;
   /** The branch it is for; missing means the whole company. */
   branchId?: string;

@@ -80,8 +80,35 @@ function fakeAi(req, res) {
   }, 900));
 }
 
+// A stand-in for api/telegram.php: one group chat the bot is in, with two messages; sending adds one.
+const tgSent = [];
+const tgMessages = [
+  { id: 1, date: 1793250000, fromId: "5", fromName: "أحمد علي", username: "ahmed", isBot: false, kind: "text", text: "عميل جديد: محمد 01012345678", fileId: null, fileName: null, replyTo: null, edited: false, sentBy: null },
+  { id: 2, date: 1793250100, fromId: "6", fromName: "منى", username: null, isBot: false, kind: "service", text: "انضم: كريم", fileId: null, fileName: null, replyTo: null, edited: false, sentBy: null },
+];
+function fakeTelegram(req, res) {
+  const out = (code, data) => (res.writeHead(code, { "Content-Type": "application/json" }), res.end(JSON.stringify(data)));
+  if (req.method === "GET") return out(200, { configured: true, storage: true });
+  let raw = "";
+  req.on("data", (c) => (raw += c));
+  req.on("end", () => {
+    const body = JSON.parse(raw || "{}");
+    if (!/^Bearer .+/.test(req.headers.authorization || "")) return out(401, { error: "unauthorized" });
+    if (body.action === "status") return out(200, { bot: { username: "shalaby_bot", name: "Shalaby", readsAllMessages: true }, webhook: { connected: true, pending: 0, lastError: null } });
+    if (body.action === "chats") return out(200, { chats: [{ chatId: "-1001234567", title: "مبيعات الجيزة", type: "supergroup", lastAt: 1793250100, lastText: "انضم: كريم", member: true, count: 2 }] });
+    if (body.action === "messages") return out(200, { rev: tgMessages.length, messages: body.after ? tgMessages.slice(body.after) : tgMessages });
+    if (body.action === "send") {
+      tgSent.push(body);
+      tgMessages.push({ id: tgMessages.length + 1, date: 1793250200, fromId: "bot", fromName: "مالك", username: null, isBot: true, kind: "text", text: body.text, fileId: null, fileName: null, replyTo: null, edited: false, sentBy: "usr-gm" });
+      return out(200, { ok: true, id: tgMessages.length });
+    }
+    out(400, { error: "bad_request" });
+  });
+}
+
 const server = createServer((req, res) => {
   if (req.url.startsWith("/api/ai.php")) return fakeAi(req, res);
+  if (req.url.startsWith("/api/telegram.php")) return fakeTelegram(req, res);
   let path = decodeURIComponent(req.url.split("?")[0]);
   if (path.endsWith("/")) path += "index.html";
   try {
@@ -290,7 +317,38 @@ await as("agentC", async (page, go) => {
   check(!(await page.locator("main").innerText()).includes("october"), "another branch's salesperson does not see it");
 });
 
-const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "جروبات التليجرام", "الهيكل الإداري", "الأقسام والفروع", "مصفوفة الصلاحيات", "قسم المطورين"];
+// Telegram groups: the owner adds the group the bot is in, opens its chat inside the CRM and replies.
+await as("gm", async (page, go) => {
+  await go("جروبات التليجرام");
+  const main = page.locator("main");
+  await main.getByText("مبيعات الجيزة").first().waitFor({ timeout: 5000 });
+  check((await main.innerText()).includes("ومش مربوطة"), "the owner sees the group the bot is in but is not linked yet");
+  await main.getByRole("button", { name: "ضيفه" }).click();
+  await page.waitForTimeout(1500);
+  let groups = [];
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    groups = (await getDocs(collection(ctx.firestore(), "telegramGroups"))).docs.map((d) => d.data());
+  });
+  check(groups.some((g) => g.chatId === "-1001234567" && g.link === ""), "the group was saved linked to its Telegram chat (rules allow it without an invite link)");
+  await main.getByRole("button", { name: "افتح الشات" }).first().click();
+  const chat = page.getByRole("region", { name: /شات مبيعات الجيزة/ });
+  await chat.getByText("عميل جديد: محمد 01012345678").waitFor({ timeout: 6000 });
+  check((await chat.innerText()).includes("أحمد علي"), "the chat shows the group's messages with the sender's name");
+  await chat.getByLabel("رسالة للجروب").fill("تمام يا أحمد، سجلته");
+  await chat.getByRole("button", { name: "إرسال" }).click();
+  await chat.getByText("تمام يا أحمد، سجلته").waitFor({ timeout: 6000 });
+  check(tgSent.length === 1 && tgSent[0].text === "تمام يا أحمد، سجلته" && !!tgSent[0].groupId, "a reply from the CRM goes to the server for the bot to post");
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/telegram-chat.png` });
+});
+
+await as("agentA", async (page, go) => {
+  await go("جروبات التليجرام");
+  const main = page.locator("main");
+  await main.getByText("مبيعات الجيزة").first().waitFor({ timeout: 5000 });
+  check((await main.getByRole("button", { name: "افتح الشات" }).count()) === 1 && (await main.getByRole("button", { name: "ضيفه" }).count()) === 0, "a salesperson opens the chat but does not manage groups");
+});
+
+const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "الهيكل الإداري", "الأقسام والفروع", "مصفوفة الصلاحيات", "قسم المطورين"];
 
 await as("gm", async (page) => {
   const aside = await page.locator("aside").textContent();

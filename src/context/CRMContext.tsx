@@ -12,7 +12,7 @@ import { asDemo, planDemoRemoval, type DemoWorld, type KnownDemoIds } from "../l
 import { egyptGovernorates, findEgyptGovernorate } from "../data/egypt";
 import { today, followUpStatus, statusNames, sourceNames, followUpTypeNames } from "../lib/presentation";
 import { rescheduled } from "../lib/followUps";
-import { edited as editedGroup, newGroup } from "../lib/telegram";
+import { edited as editedGroup, newGroup, type GroupInput } from "../lib/telegram";
 import { buildStatement, parseRows, type StatementInput } from "../lib/salesStatements";
 import { defaultTargetSettings, sanitizeTargetSettings, targetId, withAmount } from "../lib/targets";
 import { defaultAccountingSettings, newEntry, sanitizeAccountingSettings, voided, type EntryInput } from "../lib/accounting";
@@ -230,8 +230,8 @@ export interface CRMContextType {
   addSalesStatement: (input: StatementInput) => Promise<SalesStatement>;
   loadSalesStatementRows: (id: string) => Promise<string[][]>;
   removeSalesStatement: (id: string) => Promise<void>;
-  addTelegramGroup: (input: { name: string; link: string; description?: string; branchId?: string }) => TelegramGroup;
-  updateTelegramGroup: (id: string, input: { name: string; link: string; description?: string; branchId?: string }) => void;
+  addTelegramGroup: (input: GroupInput) => TelegramGroup;
+  updateTelegramGroup: (id: string, input: GroupInput) => void;
   setTelegramGroupActive: (id: string, active: boolean) => void;
   removeTelegramGroup: (id: string) => void;
 
@@ -1323,13 +1323,13 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Telegram groups directory
-  const addTelegramGroup = (input: { name: string; link: string; description?: string; branchId?: string }): TelegramGroup => {
+  const addTelegramGroup = (input: GroupInput): TelegramGroup => {
     const g = newGroup(input, `tg-${crypto.randomUUID()}`, { id: effectiveUser.id, name: effectiveUser.name }, new Date().toISOString());
     setTelegramGroups((prev) => [g, ...prev]);
     logAudit("إضافة جروب تليجرام", "جروب تليجرام", g.id, g.name);
     return g;
   };
-  const updateTelegramGroup = (id: string, input: { name: string; link: string; description?: string; branchId?: string }) => {
+  const updateTelegramGroup = (id: string, input: GroupInput) => {
     const g = telegramGroups.find((x) => x.id === id);
     if (!g) return;
     const next = editedGroup(g, input, new Date().toISOString());

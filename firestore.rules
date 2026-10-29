@@ -279,8 +279,10 @@ service cloud.firestore {
         && request.resource.data.name.size() >= 2
         && request.resource.data.name.size() <= 80
         && request.resource.data.link is string
+        && (request.resource.data.get('chatId', '') == '' || request.resource.data.chatId.matches('-?[0-9]{3,20}'))
         && (request.resource.data.link.matches('https://(t\\.me|telegram\\.me)/[A-Za-z0-9_+/\\-]{2,100}')
-            || request.resource.data.link.matches('tg://(join\\?invite|resolve\\?domain)=[A-Za-z0-9_\\-]{2,100}'));
+            || request.resource.data.link.matches('tg://(join\\?invite|resolve\\?domain)=[A-Za-z0-9_\\-]{2,100}')
+            || (request.resource.data.link == '' && request.resource.data.get('chatId', '') != ''));
       allow delete: if isManager();
     }
 

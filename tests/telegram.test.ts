@@ -42,3 +42,17 @@ test("filter by text and branch; active groups first", () => {
   assert.deepEqual(filterGroups(list, "", "none").map((g) => g.id).sort(), ["b", "c"]);
   assert.equal(filterGroups(list, "", "").at(-1)!.id, "c"); // the stopped one is last
 });
+
+test("a group can be linked to the bot's chat without an invite link, and unlinked again", () => {
+  const g = newGroup({ name: "مبيعات الجيزة", link: "", chatId: "-1001234567", chatTitle: "مبيعات" }, "tg-1", { id: "u", name: "u" }, "t");
+  assert.equal(g.link, "");
+  assert.equal(g.chatId, "-1001234567");
+  assert.throws(() => newGroup({ name: "جروب", link: "" }, "x", { id: "u", name: "u" }, "t"), "no link and no chat");
+  assert.throws(() => newGroup({ name: "جروب", link: "", chatId: "abc" }, "x", { id: "u", name: "u" }, "t"));
+  const kept = edited(g, { name: "اسم جديد", link: "" }, "t2");
+  assert.equal(kept.chatId, "-1001234567", "editing without touching the chat keeps it");
+  assert.throws(() => edited(g, { name: "اسم جديد", link: "", chatId: null }, "t2"), "unlinking needs a link instead");
+  const unlinked = edited(g, { name: "اسم جديد", link: "t.me/abcdef", chatId: null }, "t2");
+  assert.equal(unlinked.chatId, undefined);
+  assert.equal(unlinked.link, "https://t.me/abcdef");
+});

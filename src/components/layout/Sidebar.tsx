@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Target,
   FileSpreadsheet,
+  Send,
 } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { ShalabyLogo } from "../common/ShalabyLogo";
@@ -108,6 +109,7 @@ export function Sidebar({
           )}
           {nav("targets", hasPermission(effectiveUser, "targets.view") ? "الأهداف والأداء" : "هدفي", Target)}
           {nav("sales_statements", "بيان بيع", FileSpreadsheet)}
+          {nav("telegram", "جروبات التليجرام", Send)}
           {["users", "audit", "permissions", "developer"].some((page) => canAccessPage(effectiveUser, page)) && (
             <details className="nav-management" open={["users", "audit", "permissions", "developer"].includes(activeTab) || undefined}>
               <summary>
