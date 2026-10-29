@@ -5,7 +5,6 @@ const isOverlay = (n: Node): n is HTMLElement =>
 
 export function installModalMotion() {
   if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
   new MutationObserver((records) => {
     for (const rec of records) {
@@ -23,3 +22,4 @@ export function installModalMotion() {
     }
   }).observe(document.body, { childList: true, subtree: true });
 }
+

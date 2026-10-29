@@ -206,8 +206,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const setActiveTab = (tab: NavTab) => {
     if (tab === activeTab) return;
     const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
-    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (doc.startViewTransition && !calm) {
+    if (doc.startViewTransition) {
       document.documentElement.classList.add('vt-on');
       const vt = doc.startViewTransition(() => { flushSync(() => setActiveTabRaw(tab)); }) as { finished?: Promise<unknown> };
       vt.finished?.finally(() => document.documentElement.classList.remove('vt-on'));
@@ -1244,4 +1243,5 @@ export const useApp = () => {
   }
   return context;
 };
+
 

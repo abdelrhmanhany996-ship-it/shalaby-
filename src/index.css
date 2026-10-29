@@ -169,13 +169,6 @@ html, body {
 button:not(:disabled) { transition-property: transform, background-color, color, border-color, box-shadow, opacity; transition-duration: 0.2s; transition-timing-function: ease; }
 button:not(:disabled):active { transform: scale(0.97); }
 
-@media (prefers-reduced-motion: reduce) {
-  .page-enter > div > *,
-  .anim-card-in, .anim-panel-in, .anim-pop, .anim-float, .anim-drift, .anim-fade, .anim-ring, .sheen::after {
-    animation: none !important;
-  }
-  .anim-draw { animation: none; stroke-dashoffset: 0; }
-}
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
@@ -213,9 +206,6 @@ button.bg-indigo-600::after, button.bg-amber-500::after {
   animation: btn-sweep 4.5s ease-in-out infinite; pointer-events: none;
 }
 button.bg-indigo-600 { animation: glow-breathe 3.2s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  button.bg-indigo-600, button.bg-indigo-600::after, button.bg-amber-500::after { animation: none; }
-}
 
 
 
@@ -228,7 +218,6 @@ button.bg-indigo-600 { animation: glow-breathe 3.2s ease-in-out infinite; }
 .nav-item:hover .nav-ico, .nav-tab:hover .nav-ico { transform: translateY(-2px) scale(1.18) rotate(-6deg); }
 .nav-ico-active { display: inline-flex; animation: ico-pop .55s cubic-bezier(.34,1.56,.64,1) both; }
 .brand-mark { animation: mark-glow 3.5s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .nav-item, .nav-ico-active, .brand-mark { animation: none; } }
 
 /* Overscroll / status-bar area behind the app follows the theme instead of flashing cream */
 html.dark { background-color: #000; }
@@ -261,8 +250,5 @@ input, select, textarea { transition: border-color .2s ease, box-shadow .2s ease
 .modal-ghost > :not(.inset-0) { animation: dlg-out .24s cubic-bezier(.4,0,1,1) forwards !important; }
 .modal-ghost, .modal-ghost * { transition: none !important; }
 
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  .fixed.inset-0, .fixed.inset-0 > * { animation: none !important; }
-}
+
 

@@ -6,8 +6,7 @@ export const useCountUp = (target: number, duration = 900) => {
   const from = useRef(0);
 
   useEffect(() => {
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (reduce || !isFinite(target)) { setValue(target); from.current = target; return; }
+    if (!isFinite(target)) { setValue(target); from.current = target; return; }
 
     const start = performance.now();
     const begin = from.current;
