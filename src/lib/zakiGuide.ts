@@ -76,38 +76,106 @@ const itemSchema = obj(
  * Tools that PREPARE a change. They save nothing: the app shows the person a short summary and only a confirmation
  * from them (a button or "تمام") records it.
  */
+const cust = {
+  customer: { type: S, description: "اسم العميل أو جزء منه" },
+  customer_id: { type: S, description: "معرّف العميل لو معروف من أداة تانية" },
+};
+const dateStr = (what: string) => ({ type: S, description: `${what} بصيغة YYYY-MM-DD` });
+
 export const prepareCustomerTool = {
   name: "prepare_customer",
-  description: "تجهيز تسجيل عميل جديد (اسم وموبايل وملاحظة). مش بتسجل حاجة: بترجّع ملخص والمستخدم هو اللي بيأكد. استخدمها لما المستخدم يطلب يسجل عميل جديد.",
+  description: "تجهيز تسجيل عميل جديد (اسم وموبايل وملاحظة). مش بتسجل حاجة: بترجّع ملخص والمستخدم هو اللي بيأكد.",
   parameters: obj({ name: { type: S, description: "اسم العميل" }, phone: { type: S, description: "موبايل العميل" }, notes: { type: S, description: "ملاحظات (اختياري)" } }, ["name", "phone"]),
 };
 export const prepareSaleTool = {
   name: "prepare_sale",
   description: "تجهيز تسجيل عملية بيع لعميل (موجود أو جديد) بالأصناف والأسعار اللي قالها المستخدم. مش بتسجل حاجة: بترجّع ملخص والمستخدم هو اللي بيأكد. لو العميل مش متسجل ابعت phone عشان يتسجل معاها.",
-  parameters: obj(
-    {
-      customer: { type: S, description: "اسم العميل أو جزء منه" },
-      customer_id: { type: S, description: "معرّف العميل لو معروف من أداة تانية" },
-      phone: { type: S, description: "موبايل العميل (مطلوب بس لو العميل جديد)" },
-      items: { type: "ARRAY", description: "الأصناف المباعة", items: itemSchema },
-      date: { type: S, description: "تاريخ البيع YYYY-MM-DD (الافتراضي النهارده)" },
-      note: { type: S, description: "ملاحظة (اختياري)" },
-    },
-    ["items"],
-  ),
+  parameters: obj({ ...cust, phone: { type: S, description: "موبايل العميل (مطلوب بس لو العميل جديد)" }, items: { type: "ARRAY", description: "الأصناف المباعة", items: itemSchema }, date: dateStr("تاريخ البيع (الافتراضي النهارده)"), note: { type: S, description: "ملاحظة (اختياري)" } }, ["items"]),
+};
+export const prepareQuoteTool = {
+  name: "prepare_quote",
+  description: "تجهيز عرض سعر لعميل متسجل بالأصناف والأسعار. sent=true لو العرض اتبعت للعميل فعلًا (وقتها بتتجدول متابعة بعد 3 أيام). مش بتحفظ حاجة: المستخدم هو اللي بيأكد.",
+  parameters: obj({ ...cust, items: { type: "ARRAY", description: "الأصناف", items: itemSchema }, sent: { type: "BOOLEAN", description: "true لو العرض اتبعت للعميل" }, addressed_to: { type: S, description: "الاسم على الورقة لو مختلف عن اسم العميل" }, terms: { type: "ARRAY", description: "ملاحظات تحت الجدول (اختياري، الافتراضي المعتاد)", items: { type: S } } }, ["items"]),
+};
+export const prepareQuoteStatusTool = {
+  name: "prepare_quote_status",
+  description: "تجهيز تغيير حالة عرض سعر مفتوح: sent (اتبعت)، accepted (العميل وافق ← بيتسجل بيع بنفس الأصناف والأسعار)، lost (ما اتقبلش). حدد العرض برقمه أو quote_id أو اسم العميل.",
+  parameters: obj({ quote: { type: S, description: "رقم العرض Q-... أو اسم العميل" }, quote_id: { type: S, description: "معرّف العرض من list_quotes" }, status: { type: S, description: "sent | accepted | lost" }, reason: { type: S, description: "سبب عدم القبول (اختياري)" } }, ["status"]),
+};
+export const prepareFollowUpTool = {
+  name: "prepare_followup",
+  description: "تجهيز جدولة متابعة جديدة مع عميل متسجل (التاريخ والسبب مطلوبين، والساعة والنوع والأولوية اختياري).",
+  parameters: obj({ ...cust, date: dateStr("موعد المتابعة"), time: { type: S, description: "الساعة HH:mm (اختياري)" }, reason: { type: S, description: "سبب المتابعة" }, type: { type: S, description: "call | whatsapp | branch_visit | meeting (الافتراضي call)" }, priority: { type: S, description: "high | normal | low" } }, ["date", "reason"]),
+};
+export const prepareFollowUpDoneTool = {
+  name: "prepare_followup_done",
+  description: "تجهيز إقفال متابعة مفتوحة عليك بنتيجتها (إيه اللي حصل)، مع ميعاد متابعة جاية لو في. حدد المتابعة بـ follow_up_id من list_followups أو باسم العميل.",
+  parameters: obj({ follow_up_id: { type: S, description: "معرّف المتابعة من list_followups" }, customer: { type: S, description: "اسم العميل لو مفيش id" }, result: { type: S, description: "نتيجة المتابعة" }, next_date: dateStr("ميعاد المتابعة الجاية (اختياري)") }, ["result"]),
+};
+export const prepareFollowUpMoveTool = {
+  name: "prepare_followup_move",
+  description: "تجهيز تأجيل متابعة لميعاد جديد بسبب. حدد المتابعة بـ follow_up_id من list_followups أو باسم العميل.",
+  parameters: obj({ follow_up_id: { type: S, description: "معرّف المتابعة" }, customer: { type: S, description: "اسم العميل لو مفيش id" }, new_date: dateStr("الميعاد الجديد"), time: { type: S, description: "الساعة HH:mm (اختياري)" }, reason: { type: S, description: "سبب التأجيل" } }, ["new_date", "reason"]),
+};
+export const prepareNoteTool = {
+  name: "prepare_note",
+  description: "تجهيز إضافة ملاحظة على ملف عميل.",
+  parameters: obj({ ...cust, note: { type: S, description: "نص الملاحظة" } }, ["note"]),
+};
+/** Managers who may set targets. */
+export const prepareTargetTool = {
+  name: "prepare_target",
+  description: "تجهيز تحديد أو تعديل الهدف الشهري لموظف مبيعات بالجنيه.",
+  parameters: obj({ agent: { type: S, description: "اسم الموظف" }, agent_id: { type: S, description: "معرّف الموظف لو معروف" }, month: { type: S, description: "الشهر YYYY-MM (الافتراضي الحالي)" }, amount: { type: "NUMBER", description: "قيمة الهدف بالجنيه" } }, ["amount"]),
+};
+/** Managers who may hand a customer to another salesperson. */
+export const prepareReassignTool = {
+  name: "prepare_reassign",
+  description: "تجهيز نقل عميل لموظف مبيعات تاني في نفس الفرع.",
+  parameters: obj({ ...cust, agent: { type: S, description: "اسم الموظف الجديد" }, agent_id: { type: S, description: "معرّف الموظف لو معروف" } }, ["agent"]),
+};
+export const listQuotesTool = {
+  name: "list_quotes",
+  description: "عروض الأسعار: الرقم والعميل والبايع والإجمالي والأصناف والحالة (draft|sent|accepted|lost) وبقالها كام يوم اتبعتت، مع تصفية بالحالة أو العميل أو البايع أو الفترة. استخدمها لأسئلة «عروض الأسعار المفتوحة» و«مين ما ردش على العرض».",
+  parameters: obj({ status: { type: S, description: "draft|sent|accepted|lost" }, customer: { type: S, description: "اسم العميل أو رقم العرض" }, agent, branch, from, to, limit }),
+};
+export const teamSalesTool = {
+  name: "team_sales",
+  description: "مبيعات كل بايع في فترة (الافتراضي الأسبوع الحالي من السبت للجمعة): باع بكام، عدد العمليات، متوسط العملية، وعروض الأسعار (كام، قيمتها، اتقبل، مفتوح، ما اتقبلش). استخدمها لأسئلة «فلان باع بكام» و«مبيعات الأسبوع».",
+  parameters: obj({ from, to, agent, limit }),
 };
 
 /** The tool list for one user: the general tools, plus the ones their permissions open. */
-export const zakiToolsFor = (access: { targets: boolean; accounts: boolean; writeCustomer?: boolean; writeSale?: boolean }) => [
+export interface ToolAccess {
+  targets: boolean;
+  accounts: boolean;
+  writeCustomer?: boolean;
+  writeSale?: boolean;
+  writeQuote?: boolean;
+  writeFollowUp?: boolean;
+  writeNote?: boolean;
+  writeTarget?: boolean;
+  writeReassign?: boolean;
+}
+export const zakiToolsFor = (access: ToolAccess) => [
   ...zakiTools.filter((t) => !retiredTools.has(t.name)),
   performanceTool,
   attentionTool,
   // Every salesperson may ask about their own target; managers get the team's.
   ...(access.targets ? [targetsTool] : []),
   ...(access.accounts ? [accountingTool] : []),
+  listQuotesTool,
+  teamSalesTool,
   ...(access.writeCustomer ? [prepareCustomerTool] : []),
   ...(access.writeSale ? [prepareSaleTool] : []),
+  ...(access.writeQuote ? [prepareQuoteTool, prepareQuoteStatusTool] : []),
+  ...(access.writeFollowUp ? [prepareFollowUpTool, prepareFollowUpDoneTool, prepareFollowUpMoveTool] : []),
+  ...(access.writeNote ? [prepareNoteTool] : []),
+  ...(access.writeTarget ? [prepareTargetTool] : []),
+  ...(access.writeReassign ? [prepareReassignTool] : []),
 ];
+
+export const prepareToolNames = new Set(["prepare_customer", "prepare_sale", "prepare_quote", "prepare_quote_status", "prepare_followup", "prepare_followup_done", "prepare_followup_move", "prepare_note", "prepare_target", "prepare_reassign"]);
 
 /** What Zaki "studied" about the system: the parts, the vocabulary and how to look things up. */
 export const zakiGuide = `
@@ -120,10 +188,11 @@ export const zakiGuide = `
 - أنت بتشوف نطاق صلاحيات اللي بيكلمك بس: المدير بيشوف فريقه، والموظف بيشوف نفسه وعملاءه.
 طريقة الشغل:
 - مش معاك بيانات جاهزة. لما تحتاج رقم أو اسم، استدعِ الأداة المناسبة (ممكن أكتر من أداة)، وبعد ما تاخد النتيجة جاوب.
+- أسئلة المبيعات: «فلان باع بكام / مبيعات الأسبوع» ← team_sales، «حقق قد إيه من التارجت» ← employee_targets، عروض الأسعار المفتوحة ← list_quotes.
 - اختار أضيق أداة: التارجت والمتأخرين والأقرب للتحقيق ← employee_targets، أداء موظف وأسبابه ← employee_performance، أركز على إيه/مين محتاج متابعة ← attention_needed، قوائم المتابعات ← list_followups، عميل معين ← get_customer، بحث في العملاء ← find_customers، أسباب عدم الشراء ← not_bought، أرقام فترة ← period_stats، مقارنة الموظفين ← performance.
 - لما تحلل أداء موظف: اربط الأرقام ببعض (الهدف، الإنجاز، المتابعات المتأخرة، التأجيل المتكرر، أسباب عدم الشراء). السبب المحتمل قوله بصيغة «ممكن» ووضّح إنه تفسير مش حقيقة، ومتفسرش لو البيانات ما تدعمش.
 - أي توصية تتحط معاها الدليل (الأرقام والتواريخ من الأدوات) وخطوة عملية واحدة واضحة.
 - لو الأداة رجّعت truncated=true قول إن فيه أكتر من اللي اتعرض. لو رجّعت ambiguous اسأل المستخدم يحدد مين المقصود. لو البيانات مش كفاية قول إيه اللي ناقص بالظبط.
-- التسجيل (تسجيل عميل أو عملية بيع): ممنوع تقول إنك سجّلت حاجة. استخدم prepare_customer أو prepare_sale بس؛ دول بيجهّزوا العملية ومبيسجلوهاش. المستخدم هو اللي بيأكد بزرار أو بكلمة «تمام». لما الأداة ترجّع pending_confirmation: اكتب ملخص قصير جدًا باللي هيتسجل (من summary) واسأل «أسجلها؟». لو رجّعت need_info أو customer_not_found أو ambiguous_customer: اسأل المستخدم عن الناقص بس. الأصناف والأسعار والكميات من كلام المستخدم حرفيًا ومتخمّنش أي رقم. عملية واحدة في المرة.
+- أي تغيير (تسجيل عميل، بيع، عرض سعر، تغيير حالته، جدولة أو إقفال أو تأجيل متابعة، ملاحظة، هدف، نقل عميل): ممنوع تقول إنك عملته. استخدم أدوات prepare_* بس؛ دول بيجهّزوا العملية ومبيعملوهاش. لو محتاج id متابعة أو عرض هاته الأول من list_followups أو list_quotes. المستخدم هو اللي بيأكد بزرار أو بكلمة «تمام». لما الأداة ترجّع pending_confirmation: اكتب ملخص قصير جدًا باللي هيتسجل (من summary) واسأل «أسجلها؟». لو رجّعت need_info أو customer_not_found أو ambiguous_customer: اسأل المستخدم عن الناقص بس. الأصناف والأسعار والكميات من كلام المستخدم حرفيًا ومتخمّنش أي رقم. عملية واحدة في المرة.
 - اللغة: رد بنفس لغة المستخدم. لو كتب إنجليزي رد إنجليزي، وإلا بالعامية المصرية المهذبة.
 `;

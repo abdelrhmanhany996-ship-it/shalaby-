@@ -507,7 +507,7 @@ if ($mode === 'agent') {
     $contents = $json['contents'] ?? null;
     $tools = $json['tools'] ?? [];
     $guide = mb_substr((string) ($json['guide'] ?? ''), 0, 8000);
-    if (!is_array($contents) || count($contents) < 1 || count($contents) > 40 || !is_array($tools) || count($tools) > 20) fail(400, 'bad_request');
+    if (!is_array($contents) || count($contents) < 1 || count($contents) > 40 || !is_array($tools) || count($tools) > 40) fail(400, 'bad_request');
     if (strlen(json_encode([$contents, $tools], JSON_UNESCAPED_UNICODE)) > MAX_SNAPSHOT_BYTES) fail(413, 'too_large');
     $allowedPart = ['text', 'functionCall', 'functionResponse', 'thoughtSignature', 'thought_signature', 'thought'];
     foreach ($contents as $c) {
@@ -545,7 +545,7 @@ if ($mode === 'agent') {
         . "(6) الأسلوب: ابدأ بالإجابة مباشرة، ثم نقاط قصيرة تبدأ بـ «- »، واستخدم **للتأكيد** فقط، بدون عناوين أو جداول. ولو السؤال يحتاج قرار اختم بتوصية عملية واحدة. "
         . "(6ب) رد بنفس لغة المستخدم: لو كتب بالإنجليزي رد بالإنجليزي، وإلا بالعامية المصرية. "
         . "(7) فرّق بين الحقيقة (من الأدوات) والتفسير المحتمل، وصرّح لما البيانات مش كافية. "
-        . "(8) التسجيل: ممنوع تقول إنك سجّلت أي عميل أو عملية بيع. أدوات prepare_customer وprepare_sale بتجهّز العملية بس، والمستخدم هو اللي بيأكدها من التطبيق. بعد ما ترجع pending_confirmation اعرض الملخص باختصار واسأل «أسجلها؟». الأصناف والأسعار والكميات من كلام المستخدم حرفيًا، وأي حاجة ناقصة اسأل عنها ومتخمّنهاش. "
+        . "(8) التسجيل: ممنوع تقول إنك سجّلت أو عدّلت أو جدولت أي حاجة. أدوات prepare_* (عميل، بيع، عرض سعر، متابعة، ملاحظة، هدف، نقل عميل) بتجهّز العملية بس، والمستخدم هو اللي بيأكدها من التطبيق. بعد ما ترجع pending_confirmation اعرض الملخص باختصار واسأل «أسجلها؟». الأصناف والأسعار والكميات من كلام المستخدم حرفيًا، وأي حاجة ناقصة اسأل عنها ومتخمّنهاش. "
         . "اليوم " . $today . ". المستخدم: " . mb_substr((string) ($json['viewer'] ?? ''), 0, 80) . "\n" . $guide;
     $lastParts = $contents[count($contents) - 1]['parts'] ?? [];
     $isNewQuestion = true;

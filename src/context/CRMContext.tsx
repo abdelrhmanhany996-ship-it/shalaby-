@@ -22,6 +22,7 @@ import {
 } from "../lib/postSale";
 import { defaultTerms, nextQuoteNumber, priceLines, quoteError, quoteFollowUpDate, quoteFollowUpReason } from "../lib/quotes";
 import { productsLabel } from "../lib/purchaseLines";
+import { AUTO_FOLLOWUP_DAYS } from "../lib/followUpDefaults";
 import {
   reasonLabel,
   unknownReasonQuestion,
@@ -892,7 +893,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Lead CRUD
-  const AUTO_FOLLOWUP_DAYS = 2;
   const addLead = (leadData: Omit<Lead, "id" | "createdAt">, autoFollowUp = true): Lead => {
     const id = `ld-${crypto.randomUUID()}`;
     const branch = branches.find((b) => b.id === leadData.branchId);

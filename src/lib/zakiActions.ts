@@ -1,4 +1,6 @@
-import type { Booking, Lead, PurchaseLine } from "../types/crm";
+import type { Booking, FollowUp, FollowUpPriority, FollowUpType, Lead, PurchaseLine, Quote, User } from "../types/crm";
+import { defaultTerms, QUOTE_FOLLOWUP_DAYS } from "./quotes";
+import { isSalesCapable } from "./permissions";
 import { cleanLines, describeLine, grandTotal, productsLabel } from "./purchaseLines";
 import { phoneKey } from "./referrals";
 
@@ -7,9 +9,11 @@ import { phoneKey } from "./referrals";
  * nothing is saved until the person confirms it (a button, or a plain "تمام" typed in the chat). The confirmation is
  * recognised here, in code, so a model can never confirm on its own behalf.
  */
+export type ActionKind = "customer" | "sale" | "quote" | "quote_status" | "followup" | "followup_done" | "followup_move" | "note" | "target" | "reassign";
+
 export interface PendingAction {
   id: string;
-  kind: "customer" | "sale";
+  kind: ActionKind;
   /** The existing customer a sale is for. */
   leadId?: string;
   /** The customer to register (alone, or together with the sale). */
@@ -22,6 +26,23 @@ export interface PendingAction {
   date: string;
   /** Short lines shown to the person before they confirm. */
   summary: string[];
+  quote?: { addressedTo?: string; terms: string[]; send: boolean };
+  quoteId?: string;
+  quoteStatus?: "sent" | "lost" | "accepted";
+  reason?: string;
+  followUp?: { id?: string; date?: string; time?: string; reason?: string; type?: FollowUpType; priority?: FollowUpPriority; result?: string; nextDate?: string };
+  target?: { userId: string; userName: string; month: string; amount: number };
+  reassign?: { toUserId: string; toName: string };
+}
+
+/** What the planners may look at: only rows the signed-in person can already see. */
+export interface PlanData {
+  leads: Lead[];
+  quotes: Quote[];
+  followUps: FollowUp[];
+  users: User[];
+  today: string;
+  me: { id: string; name: string };
 }
 
 type Args = Record<string, unknown>;
@@ -173,4 +194,204 @@ export function confirmation(text: string): "yes" | "no" | null {
   if (w.every((x) => YES.has(x))) return "yes";
   if (w.every((x) => NO.has(x)) && w.some((x) => STRONG_NO.has(x))) return "no";
   return null;
+}
+
+// ---------- the other operations ----------
+const empty = { lines: [] as PurchaseLine[], total: 0, date: "" };
+const isTime = (v: unknown): v is string => typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+const typeNames: Record<FollowUpType, string> = { call: "مكالمة", whatsapp: "واتساب", branch_visit: "زيارة فرع", email: "إيميل", meeting: "اجتماع" };
+const priorityNames: Record<FollowUpPriority, string> = { high: "عالية", normal: "عادية", low: "منخفضة" };
+const openFollowUp = (f: FollowUp) => f.status !== "completed" && f.status !== "cancelled";
+const needInfo = (missing: string): Plan => ({ ok: false, result: { status: "need_info", missing } });
+const customerFrom = (args: Args, leads: Lead[]) => resolveCustomer(leads, { id: str(args.customer_id), name: str(args.customer), phone: str(args.phone, 30) });
+const askWhich = (found: Resolved): Plan | null =>
+  found.kind === "ambiguous"
+    ? { ok: false, result: { status: "ambiguous_customer", customers: found.leads.map(brief), hint: "اسأل المستخدم يحدد مين فيهم." } }
+    : found.kind === "none"
+      ? { ok: false, result: { status: "customer_not_found", hint: "العميل مش متسجل. لو عاوز تسجله استخدم prepare_customer الأول." } }
+      : null;
+
+export function planQuote(args: Args, d: PlanData): Plan {
+  const items = parseItems(args.items);
+  if (items.problem) return needInfo(items.problem);
+  const found = customerFrom(args, d.leads);
+  const stop = askWhich(found);
+  if (stop) return stop;
+  const lead = (found as Extract<Resolved, { kind: "found" }>).lead;
+  const total = grandTotal(items.lines);
+  const termsIn = Array.isArray(args.terms) ? args.terms.map((t) => str(t, 160)).filter((t): t is string => !!t).slice(0, 12) : [];
+  const terms = termsIn.length ? termsIn : defaultTerms;
+  const send = args.sent === true;
+  const addressedTo = str(args.addressed_to, 120);
+  return {
+    ok: true,
+    action: {
+      id: newId(),
+      kind: "quote",
+      leadId: lead.id,
+      customerName: lead.name,
+      ...empty,
+      lines: items.lines,
+      total,
+      quote: { ...(addressedTo ? { addressedTo } : {}), terms, send },
+      summary: [`عرض سعر للعميل ${lead.name}`, ...items.lines.map(describeLine), `الإجمالي: ${money(total)} ج.م`, send ? `هيتعلّم إنه اتبعت وهتتجدول متابعة بعد ${QUOTE_FOLLOWUP_DAYS} أيام (لو مفيش متابعة مفتوحة).` : "هيتحفظ كمسودة (لسه ما اتبعتش)."],
+    },
+  };
+}
+
+const findQuote = (args: Args, quotes: Quote[]): { quote?: Quote; stop?: Plan } => {
+  const id = str(args.quote_id);
+  const number = str(args.quote);
+  const customer = str(args.customer);
+  let rows = quotes.filter((q) => q.status === "draft" || q.status === "sent");
+  if (id) rows = rows.filter((q) => q.id === id);
+  else if (number && /^Q-/i.test(number)) rows = rows.filter((q) => q.number.toLowerCase() === number.toLowerCase());
+  else if (customer || number) rows = rows.filter((q) => norm(q.leadName).includes(norm(customer ?? number!)));
+  else return { stop: needInfo("أنهي عرض سعر؟ (رقمه أو اسم العميل)") };
+  if (!rows.length) return { stop: { ok: false, result: { status: "quote_not_found", hint: "مفيش عرض سعر مفتوح بالوصف ده. ممكن تستخدم list_quotes." } } };
+  if (rows.length > 1) return { stop: { ok: false, result: { status: "ambiguous_quote", quotes: rows.slice(0, 8).map((q) => ({ id: q.id, number: q.number, customer: q.leadName, totalEGP: q.total, status: q.status })), hint: "اسأل المستخدم يحدد أنهي عرض." } } };
+  return { quote: rows[0] };
+};
+
+export function planQuoteStatus(args: Args, d: PlanData): Plan {
+  const status = args.status;
+  if (status !== "sent" && status !== "lost" && status !== "accepted") return needInfo("الحالة الجديدة: اتبعت (sent) أو اتقبل (accepted) أو ما اتقبلش (lost)");
+  const { quote, stop } = findQuote(args, d.quotes);
+  if (stop) return stop;
+  const q = quote!;
+  if (status === "sent" && q.status === "sent") return { ok: false, result: { status: "invalid", problem: "العرض ده متعلّم إنه اتبعت قبل كده." } };
+  const reason = str(args.reason, 200);
+  const what = status === "sent" ? `هيتعلّم إنه اتبعت وهتتجدول متابعة بعد ${QUOTE_FOLLOWUP_DAYS} أيام (لو مفيش متابعة مفتوحة)` : status === "accepted" ? `العميل وافق: هيتسجّل بيع بنفس الأصناف والأسعار (${money(q.total)} ج.م)` : `العميل ما وافقش${reason ? `: ${reason}` : ""}`;
+  return {
+    ok: true,
+    action: { id: newId(), kind: "quote_status", quoteId: q.id, quoteStatus: status, ...(reason ? { reason } : {}), customerName: q.leadName, ...empty, summary: [`عرض السعر ${q.number} للعميل ${q.leadName} (${money(q.total)} ج.م)`, what] },
+  };
+}
+
+export function planFollowUp(args: Args, d: PlanData): Plan {
+  const found = customerFrom(args, d.leads);
+  const stop = askWhich(found);
+  if (stop) return stop;
+  const lead = (found as Extract<Resolved, { kind: "found" }>).lead;
+  const date = args.date;
+  if (!isDate(date)) return needInfo("ميعاد المتابعة (التاريخ)");
+  if (date < d.today) return { ok: false, result: { status: "invalid", problem: "تاريخ المتابعة فات." } };
+  const reason = str(args.reason, 200);
+  if (!reason) return needInfo("سبب المتابعة");
+  const time = isTime(args.time) ? args.time : undefined;
+  const type = (Object.keys(typeNames) as FollowUpType[]).find((t) => t === args.type) ?? "call";
+  const priority = (Object.keys(priorityNames) as FollowUpPriority[]).find((p) => p === args.priority) ?? "normal";
+  return {
+    ok: true,
+    action: {
+      id: newId(),
+      kind: "followup",
+      leadId: lead.id,
+      customerName: lead.name,
+      ...empty,
+      followUp: { date, ...(time ? { time } : {}), reason, type, priority },
+      summary: [`متابعة للعميل ${lead.name}`, `الموعد: ${date}${time ? ` الساعة ${time}` : ""} · ${typeNames[type]} · أولوية ${priorityNames[priority]}`, `السبب: ${reason}`],
+    },
+  };
+}
+
+const findFollowUp = (args: Args, d: PlanData, mineOnly: boolean): { followUp?: FollowUp; stop?: Plan } => {
+  const id = str(args.follow_up_id);
+  let rows = d.followUps.filter(openFollowUp).filter((f) => !mineOnly || f.assignedAgentId === d.me.id);
+  if (id) rows = rows.filter((f) => f.id === id);
+  else {
+    const customer = str(args.customer);
+    if (!customer) return { stop: needInfo("أنهي متابعة؟ (اسم العميل أو استخدم list_followups)") };
+    rows = rows.filter((f) => norm(f.leadName).includes(norm(customer)));
+  }
+  if (!rows.length) return { stop: { ok: false, result: { status: "followup_not_found", hint: mineOnly ? "مفيش متابعة مفتوحة عليك بالوصف ده." : "مفيش متابعة مفتوحة بالوصف ده." } } };
+  if (rows.length > 1) return { stop: { ok: false, result: { status: "ambiguous_followup", followUps: rows.slice(0, 8).map((f) => ({ id: f.id, customer: f.leadName, due: f.scheduledAt.slice(0, 10), reason: f.reason.slice(0, 80) })), hint: "اسأل المستخدم يحدد أنهي متابعة." } } };
+  return { followUp: rows[0] };
+};
+
+export function planFollowUpDone(args: Args, d: PlanData): Plan {
+  const { followUp: f, stop } = findFollowUp(args, d, true);
+  if (stop) return stop;
+  const result = str(args.result, 300);
+  if (!result) return needInfo("إيه اللي حصل في المتابعة؟ (النتيجة)");
+  const next = args.next_date;
+  if (next !== undefined && next !== null && next !== "" && (!isDate(next) || next < d.today)) return { ok: false, result: { status: "invalid", problem: "ميعاد المتابعة الجاية مش صحيح." } };
+  const nextDate = isDate(next) ? next : undefined;
+  return {
+    ok: true,
+    action: {
+      id: newId(),
+      kind: "followup_done",
+      leadId: f!.leadId,
+      customerName: f!.leadName,
+      ...empty,
+      followUp: { id: f!.id, result, ...(nextDate ? { nextDate } : {}) },
+      summary: [`إقفال متابعة العميل ${f!.leadName} (${f!.scheduledAt.slice(0, 10)}: ${f!.reason.slice(0, 60)})`, `النتيجة: ${result}`, nextDate ? `متابعة جاية: ${nextDate}` : "من غير متابعة جاية."],
+    },
+  };
+}
+
+export function planFollowUpMove(args: Args, d: PlanData, managerOk: boolean): Plan {
+  const { followUp: f, stop } = findFollowUp(args, d, !managerOk);
+  if (stop) return stop;
+  const date = args.new_date;
+  if (!isDate(date) || date < d.today) return needInfo("الميعاد الجديد (تاريخ مش فايت)");
+  const time = isTime(args.time) ? args.time : undefined;
+  const reason = str(args.reason, 200);
+  if (!reason) return needInfo("سبب التأجيل");
+  const to = time ? `${date}T${time}` : date;
+  if (to === f!.scheduledAt) return { ok: false, result: { status: "invalid", problem: "الميعاد الجديد زي القديم." } };
+  return {
+    ok: true,
+    action: {
+      id: newId(),
+      kind: "followup_move",
+      leadId: f!.leadId,
+      customerName: f!.leadName,
+      ...empty,
+      followUp: { id: f!.id, date, ...(time ? { time } : {}), reason },
+      summary: [`تأجيل متابعة العميل ${f!.leadName}`, `من ${f!.scheduledAt.replace("T", " ")} إلى ${to.replace("T", " ")}`, `السبب: ${reason}`],
+    },
+  };
+}
+
+export function planNote(args: Args, d: PlanData): Plan {
+  const found = customerFrom(args, d.leads);
+  const stop = askWhich(found);
+  if (stop) return stop;
+  const lead = (found as Extract<Resolved, { kind: "found" }>).lead;
+  const note = str(args.note, 500);
+  if (!note) return needInfo("نص الملاحظة");
+  return { ok: true, action: { id: newId(), kind: "note", leadId: lead.id, customerName: lead.name, ...empty, note, summary: [`ملاحظة على ملف العميل ${lead.name}`, note] } };
+}
+
+export function planTarget(args: Args, d: PlanData): Plan {
+  const who = str(args.agent_id) ?? str(args.agent);
+  if (!who) return needInfo("الموظف");
+  const people = d.users.filter((u) => u.active && isSalesCapable(u));
+  const exact = people.filter((u) => u.id === who);
+  const rows = exact.length ? exact : people.filter((u) => norm(u.name).includes(norm(who)));
+  if (!rows.length) return { ok: false, result: { status: "agent_not_found", hint: "مفيش موظف مبيعات بالاسم ده في نطاقك." } };
+  if (rows.length > 1) return { ok: false, result: { status: "ambiguous_agent", agents: rows.slice(0, 8).map((u) => ({ id: u.id, name: u.name })) } };
+  const month = typeof args.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(args.month) ? args.month : d.today.slice(0, 7);
+  const amount = typeof args.amount === "number" && Number.isFinite(args.amount) && args.amount > 0 ? Math.round(args.amount) : 0;
+  if (!amount) return needInfo("قيمة الهدف بالجنيه");
+  const u = rows[0];
+  return { ok: true, action: { id: newId(), kind: "target", customerName: u.name, ...empty, target: { userId: u.id, userName: u.name, month, amount }, summary: [`هدف ${u.name} لشهر ${month}: ${money(amount)} ج.م`] } };
+}
+
+export function planReassign(args: Args, d: PlanData): Plan {
+  const found = customerFrom(args, d.leads);
+  const stop = askWhich(found);
+  if (stop) return stop;
+  const lead = (found as Extract<Resolved, { kind: "found" }>).lead;
+  const who = str(args.agent_id) ?? str(args.agent);
+  if (!who) return needInfo("الموظف الجديد المسؤول عن العميل");
+  const people = d.users.filter((u) => u.active && isSalesCapable(u) && u.branchId === lead.branchId);
+  const exact = people.filter((u) => u.id === who);
+  const rows = exact.length ? exact : people.filter((u) => norm(u.name).includes(norm(who)));
+  if (!rows.length) return { ok: false, result: { status: "agent_not_found", hint: "مفيش موظف مبيعات بالاسم ده في فرع العميل." } };
+  if (rows.length > 1) return { ok: false, result: { status: "ambiguous_agent", agents: rows.slice(0, 8).map((u) => ({ id: u.id, name: u.name })) } };
+  if (rows[0].id === lead.assignedAgentId) return { ok: false, result: { status: "invalid", problem: "العميل ده مع الموظف ده أصلًا." } };
+  return { ok: true, action: { id: newId(), kind: "reassign", leadId: lead.id, customerName: lead.name, ...empty, reassign: { toUserId: rows[0].id, toName: rows[0].name }, summary: [`نقل العميل ${lead.name} للموظف ${rows[0].name}`] } };
 }

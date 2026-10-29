@@ -3,10 +3,11 @@ import { Check, Send, X } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { aiStatus, runZaki, type ChatTurn } from "../../lib/aiClient";
 import { runTool, toolLabels, type ToolData } from "../../lib/zakiTools";
-import { zakiGuide, zakiToolsFor } from "../../lib/zakiGuide";
+import { prepareToolNames, zakiGuide, zakiToolsFor } from "../../lib/zakiGuide";
 import { hasPermission, isSalesCapable } from "../../lib/permissions";
-import { canAccessPage, canCreateCustomer, defaultAgent } from "../../lib/access";
-import { bookingFor, confirmation, planCustomer, planSale, type PendingAction } from "../../lib/zakiActions";
+import { canAccessPage, canAssignCustomers, canCreateCustomer, defaultAgent, isSales } from "../../lib/access";
+import { confirmation, planCustomer, planFollowUp, planFollowUpDone, planFollowUpMove, planNote, planQuote, planQuoteStatus, planReassign, planSale, planTarget, type PendingAction, type PlanData } from "../../lib/zakiActions";
+import { performAction } from "../../lib/zakiPerform";
 import { interestNames } from "../common/InterestPicker";
 import { ActionDenied } from "../../lib/actionDenied";
 import { today } from "../../lib/presentation";
@@ -123,16 +124,22 @@ function Rich({ text }: { text: string }) {
 
 /** Zaki: a floating assistant that answers questions about the data the user can see. */
 export function ZakiChat() {
-  const { currentUser, effectiveUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes, employeeTargets, targetSettings, accountEntries, accountingSettings, targetUsers, addLead, addBooking, findDuplicateLeadsByPhone } = useCRM();
+  const { currentUser, effectiveUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes, employeeTargets, targetSettings, accountEntries, accountingSettings, targetUsers, quotes, addLead, addBooking, findDuplicateLeadsByPhone, saveQuote, setQuoteStatus, acceptQuote, addFollowUp, updateFollowUpResult, rescheduleFollowUp, updateLead, addTimelineEvent, setEmployeeTarget, reassignLead } = useCRM();
   const canWriteCustomer = canCreateCustomer(effectiveUser);
   const canWriteSale = hasPermission(effectiveUser, "bookings.create") && isSalesCapable(effectiveUser);
+  const canWriteQuote = hasPermission(effectiveUser, "customers.edit") && canAccessPage(effectiveUser, "quotes");
+  const canWriteFollowUp = hasPermission(effectiveUser, "followups.create") || hasPermission(effectiveUser, "followups.complete");
+  const canWriteNote = hasPermission(effectiveUser, "customers.edit");
+  const canWriteTarget = hasPermission(effectiveUser, "targets.manage");
+  const canWriteReassign = canAssignCustomers(effectiveUser);
   const canTargets = hasPermission(effectiveUser, "targets.view") || isSalesCapable(effectiveUser);
   // The accounts screen was taken out of the simplified CRM, so its tool is not offered either.
   const canAccounts = hasPermission(effectiveUser, "accounts.view") && canAccessPage(effectiveUser, "accounts");
+  const toolAccess = { targets: canTargets, accounts: canAccounts, writeCustomer: canWriteCustomer, writeSale: canWriteSale, writeQuote: canWriteQuote, writeFollowUp: canWriteFollowUp, writeNote: canWriteNote, writeTarget: canWriteTarget, writeReassign: canWriteReassign };
   // Always the latest data: the ref is refreshed on every render, and Firestore keeps the state live.
   const dataRef = useRef<ToolData | null>(null);
   dataRef.current = {
-    today: today(), leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes,
+    today: today(), leads, bookings, quotes, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes,
     ...(canTargets ? { employeeTargets, targetSettings, targetUsers } : {}),
     ...(canAccounts ? { accounting: { entries: accountEntries, settings: accountingSettings } } : {}),
   };
@@ -234,50 +241,53 @@ export function ZakiChat() {
   /** Runs a prepare_* tool: checks and stores the change, saves nothing. */
   const prepare = (name: string, args: Record<string, unknown>): unknown => {
     const data = dataRef.current!;
-    if (name === "prepare_customer" && !canWriteCustomer) return { error: "حسابك مش مسموحله يضيف عملاء." };
-    if (name === "prepare_sale" && !canWriteSale) return { error: "حسابك مش مسموحله يسجل مبيعات." };
-    const plan = name === "prepare_customer" ? planCustomer(args, data.leads) : planSale(args, data.leads, data.today);
+    const allowed: Record<string, boolean> = {
+      prepare_customer: canWriteCustomer,
+      prepare_sale: canWriteSale,
+      prepare_quote: canWriteQuote,
+      prepare_quote_status: canWriteQuote,
+      prepare_followup: canWriteFollowUp,
+      prepare_followup_done: canWriteFollowUp,
+      prepare_followup_move: canWriteFollowUp,
+      prepare_note: canWriteNote,
+      prepare_target: canWriteTarget,
+      prepare_reassign: canWriteReassign,
+    };
+    if (!allowed[name]) return { error: "حسابك مش مسموحله بالعملية دي." };
+    const d: PlanData = { leads: data.leads, quotes: data.quotes ?? [], followUps: data.followUps, users, today: data.today, me: { id: effectiveUser.id, name: effectiveUser.name } };
+    const plan =
+      name === "prepare_customer" ? planCustomer(args, data.leads)
+      : name === "prepare_sale" ? planSale(args, data.leads, data.today)
+      : name === "prepare_quote" ? planQuote(args, d)
+      : name === "prepare_quote_status" ? planQuoteStatus(args, d)
+      : name === "prepare_followup" ? planFollowUp(args, d)
+      : name === "prepare_followup_done" ? planFollowUpDone(args, d)
+      : name === "prepare_followup_move" ? planFollowUpMove(args, d, hasPermission(effectiveUser, "followups.create") && !isSales(effectiveUser))
+      : name === "prepare_note" ? planNote(args, d)
+      : name === "prepare_target" ? planTarget(args, { ...d, users: targetUsers })
+      : name === "prepare_reassign" ? planReassign(args, d)
+      : null;
+    if (!plan) return { error: `أداة غير معروفة: ${name}` };
     if (!plan.ok) return plan.result;
     pendingRef.current = { action: plan.action, at: Date.now() };
     setPendingId(plan.action.id);
-    return { status: "pending_confirmation", summary: plan.action.summary, note: "لسه مفيش حاجة اتسجلت. اعرض الملخص باختصار واسأل المستخدم يأكد." };
+    return { status: "pending_confirmation", summary: plan.action.summary, note: "لسه مفيش حاجة اتعملت. اعرض الملخص باختصار واسأل المستخدم يأكد." };
   };
 
   const setActionState = (id: string, state: "done" | "cancelled" | "failed", extra?: ChatTurn) =>
     setTurns((t) => [...t.map((x) => (x.action?.id === id ? { ...x, action: { ...x.action, state } } : x)), ...(extra ? [extra] : [])]);
 
   /** Records the prepared change, as the signed-in person, through the same permission checks as the screens. */
-  const perform = (a: PendingAction): string => {
-    let lead = a.leadId ? dataRef.current!.leads.find((l) => l.id === a.leadId) : undefined;
-    let created = false;
-    if (!lead && a.newCustomer) {
-      if (findDuplicateLeadsByPhone(a.newCustomer.phone).length) throw new Error("رقم الموبايل ده متسجّل قبل كده لعميل. اطلب مني أدور عليه وأسجل له البيع.");
-      const branchId = effectiveUser.branchId || branches[0]?.id || "";
-      const agentId = defaultAgent(users, effectiveUser, branchId);
-      if (!branchId) throw new Error("مش قادر أحدد الفرع للعميل الجديد. سجّله من صفحة العملاء.");
-      lead = addLead({
-        name: a.newCustomer.name,
-        phone: a.newCustomer.phone,
-        whatsappPhone: a.newCustomer.phone,
-        isSameWhatsApp: true,
-        source: "phone_inquiry",
-        customerCategory: "individual",
-        branchId,
-        assignedAgentId: agentId,
-        status: "new",
-        classification: "B",
-        department: "general",
-        interests: ["general"],
-        departmentName: interestNames(["general"]),
-        notes: a.newCustomer.notes ?? "",
-      });
-      created = true;
-    }
-    if (!lead) throw new Error("العميل مش موجود.");
-    if (a.kind === "customer") return `اتسجّل العميل ${lead.name}. وفيه متابعة أولى متجدولة بعد يومين.`;
-    addBooking(bookingFor(lead, a, lead.assignedAgentId || effectiveUser.id));
-    return `${created ? `اتسجّل العميل ${lead.name} و` : ""}اتسجّلت عملية بيع ${lead.name} بإجمالي ${a.total.toLocaleString("en-US")} ج.م.`;
-  };
+  const perform = (a: PendingAction): string =>
+    performAction(a, {
+      leads: dataRef.current!.leads,
+      quotes: dataRef.current!.quotes ?? [],
+      me: { id: effectiveUser.id, name: effectiveUser.name, branchId: effectiveUser.branchId },
+      firstBranchId: branches[0]?.id ?? "",
+      newCustomerAgentId: (branchId) => defaultAgent(users, effectiveUser, branchId),
+      interestNames: (ids) => interestNames(ids),
+      addLead, addBooking, saveQuote, setQuoteStatus, acceptQuote, addFollowUp, updateFollowUpResult, rescheduleFollowUp, updateLead, addTimelineEvent, setEmployeeTarget, reassignLead, findDuplicateLeadsByPhone,
+    });
 
   /** The person said yes or no to the prepared change (button or a typed "تمام"). */
   const decide = (yes: boolean) => {
@@ -322,11 +332,11 @@ export function ZakiChat() {
       const { answer, used } = await runZaki({
         question: q,
         history,
-        tools: zakiToolsFor({ targets: canTargets, accounts: canAccounts, writeCustomer: canWriteCustomer, writeSale: canWriteSale }),
+        tools: zakiToolsFor(toolAccess),
         guide: zakiGuide,
         today: today(),
         viewer: currentUser.name,
-        execute: (name, args) => (name === "prepare_customer" || name === "prepare_sale" ? prepare(name, args) : runTool(name, args, dataRef.current!)),
+        execute: (name, args) => (prepareToolNames.has(name) ? prepare(name, args) : runTool(name, args, dataRef.current!)),
         onStep: (name) => setSteps((s) => [...s, toolLabels[name] ?? name]),
       });
       setTurns((t) => {

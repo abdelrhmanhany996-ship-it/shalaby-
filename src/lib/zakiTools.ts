@@ -1,4 +1,4 @@
-import type { AccountEntry, AccountingSettings, Booking, Branch, BrokerEntity, Department, EmployeeTarget, FollowUp, Lead, NotBoughtRecord, ReviewNote, ReviewRequest, TargetSettings, User, Visit } from "../types/crm";
+import type { AccountEntry, AccountingSettings, Quote, Booking, Branch, BrokerEntity, Department, EmployeeTarget, FollowUp, Lead, NotBoughtRecord, ReviewNote, ReviewRequest, TargetSettings, User, Visit } from "../types/crm";
 import { balances, filterEntries, summarize } from "./accounting";
 import { overview as targetsOverview, monthOf as targetMonth, isMonth, targetStateNames, shiftMonth, achievedFor, evaluate, targetId } from "./targets";
 import { bucketOf, priorityNames, priorityOf } from "./followUps";
@@ -8,6 +8,8 @@ import { brokerRows, customerRows, feedbackSummary } from "./overview";
 import { departmentNames, followUpStatus, sourceNames, statusNames } from "./presentation";
 import { notBoughtReasons, reasonLabel } from "./notBought";
 import { isSalesCapable } from "./permissions";
+import { quoteStatusNames, validUntil } from "./quotes";
+import { teamTotals, weekRange, weeklyTeamSales } from "./teamSales";
 import { employeeRatings, ratingLevelLabel } from "./employeeRating";
 import { pendingReferral, referrerRows } from "./referrals";
 import { complaintOpenedAt, complaintState, complaintStateLabel, isComplaint, isLateComplaint, resolutionHours, reviewStats } from "./reviews";
@@ -23,6 +25,7 @@ export interface ToolData {
   brokers: BrokerEntity[];
   users: User[];
   branches: Branch[];
+  quotes?: Quote[];
   reviewRequests?: ReviewRequest[];
   reviewNotes?: ReviewNote[];
   /** Targets: a manager's scope, or only the person's own row. */
@@ -241,6 +244,8 @@ export function runTool(name: string, a: Args, d: ToolData): unknown {
         .filter((f) => !status || followUpStatus(f) === status)
         .filter((f) => !kind || (kind === "post_sale") === (f.category === "post_sale"))
         .map((f) => ({
+          id: f.id,
+          customerId: f.leadId,
           customer: f.leadName,
           agent: userName(f.assignedAgentId) ?? null,
           branch: branchName(f.branchId),
@@ -256,6 +261,45 @@ export function runTool(name: string, a: Args, d: ToolData): unknown {
         }))
         .sort((x, y) => y.daysOverdue - x.daysOverdue || x.due.localeCompare(y.due));
       return page(rows, limitOf(a));
+    }
+
+    case "list_quotes": {
+      const bids = branchIdsFor(a.branch);
+      const aids = agentIdsFor(a.agent);
+      const status = str(a.status);
+      const rows = (d.quotes ?? [])
+        .filter((q) => inBranch(q.branchId, bids))
+        .filter((q) => !aids || aids.includes(q.agentId))
+        .filter((q) => !status || q.status === status)
+        .filter((q) => !str(a.customer) || has(q.leadName, a.customer) || q.number === a.customer)
+        .filter((q) => (!from && !to) || inRange(q.date, from, to))
+        .sort((x, y) => y.createdAt.localeCompare(x.createdAt))
+        .map((q) => ({
+          id: q.id,
+          number: q.number,
+          date: q.date,
+          customerId: q.leadId,
+          customer: q.leadName,
+          agent: userName(q.agentId) ?? null,
+          status: quoteStatusNames[q.status],
+          statusCode: q.status,
+          totalEGP: q.total,
+          items: q.lines.slice(0, 10).map((l) => ({ product: l.name, pieces: l.qty ?? null, pricePerPieceEGP: l.price ?? null, totalEGP: l.total })),
+          daysSinceSent: q.sentAt ? Math.max(0, Math.round((Date.parse(d.today) - Date.parse(q.sentAt.slice(0, 10))) / 86_400_000)) : null,
+          validUntil: validUntil(q),
+          lostReason: q.lostReason ?? null,
+        }));
+      return { ...page(rows, limitOf(a)), totalValueEGP: sum(rows.map((r) => r.totalEGP)) };
+    }
+
+    case "team_sales": {
+      const range = from || to ? { from: from ?? "0000-01-01", to: to ?? d.today } : weekRange(d.today);
+      const sellers = weeklyTeamSales({ users: d.targetUsers ?? d.users, bookings: d.bookings, quotes: d.quotes ?? [], from: range.from, to: range.to });
+      const only = str(a.agent);
+      const rows = sellers
+        .filter((r) => !only || has(r.name, only))
+        .map((r) => ({ agent: r.name, soldEGP: r.sales, deals: r.deals, averageDealEGP: r.deals ? Math.round(r.sales / r.deals) : 0, quotes: r.quotes, quotesValueEGP: r.quotesValue, quotesAccepted: r.accepted, quotesOpen: r.pending, quotesLost: r.lost }));
+      return { period: range, total: teamTotals(sellers), rows: rows.slice(0, limitOf(a)) };
     }
 
     case "list_purchases": {
@@ -567,6 +611,8 @@ export const toolLabels: Record<string, string> = {
   referrals: "بشوف الترشيحات",
   employee_targets: "بقارن الأهداف بالإنجاز",
   accounting: "بقلّب في الحسابات",
+  list_quotes: "بقلّب في عروض الأسعار",
+  team_sales: "بحسب مبيعات الفريق",
   prepare_customer: "بجهّز تسجيل العميل",
   prepare_sale: "بجهّز عملية البيع",
 };
