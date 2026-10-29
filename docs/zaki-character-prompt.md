@@ -1,7 +1,7 @@
 # برومبت شخصية شلبي (لتوليد الصور)
 
 ## الوصف الأساسي (الصقه في كل مرة)
-Cute friendly Egyptian sales-support employee mascot named "Zaki", early 30s, warm tan skin, short neat dark-brown hair, big expressive dark eyes with small white highlights, rosy cheeks, soft smile. He wears a deep brand-red polo shirt with a small white collar and a tiny white name tag, and a slim black customer-service headset with a red ear cushion. Half-body portrait (head and shoulders to chest), centered, facing slightly toward the viewer. Style: modern 3D-cartoon / Pixar-like, soft rounded shapes, smooth lighting, clean vector-like finish, consistent proportions. Transparent background, no text, no shadow on the ground, square 1:1 canvas, 1024x1024.
+Cute friendly Egyptian sales-support employee mascot named "Shalaby", early 30s, warm tan skin, short neat dark-brown hair, big expressive dark eyes with small white highlights, rosy cheeks, soft smile. He wears a deep brand-red polo shirt with a small white collar and a tiny white name tag, and a slim black customer-service headset with a red ear cushion. Half-body portrait (head and shoulders to chest), centered, facing slightly toward the viewer. Style: modern 3D-cartoon / Pixar-like, soft rounded shapes, smooth lighting, clean vector-like finish, consistent proportions. Transparent background, no text, no shadow on the ground, square 1:1 canvas, 1024x1024.
 
 ## التعابير المطلوبة (غيّر السطر ده بس، وخلّي الباقي زي ما هو)
 1. idle: calm friendly smile, eyes open, looking at the viewer.
@@ -18,3 +18,8 @@ Cute friendly Egyptian sales-support employee mascot named "Zaki", early 30s, wa
 - استخدم نفس الـ seed / نفس الصورة المرجعية للتعبير الأول عشان الوش يفضل ثابت.
 - خليه PNG بخلفية شفافة، ومتسمي بالظبط: idle.png wave.png thinking.png happy.png talking.png listening.png sorry.png surprised.png sleepy.png
 - حطهم في المجلد public/zaki/ وهيتبدلوا تلقائيًا مكان الرسمة المدمجة، من غير أي تعديل في الكود.
+
+## النسخة الحالية (16 تعبير)
+الصور الحالية في `public/zaki/` مقصوصة من شيت واحد 4×4 (قميص كحلي مكتوب عليه SHALABY). الأسماء بالترتيب (صف صف):
+idle, wave, listening, thinking / talking, offer, happy, cheer / sorry, confused, surprised, thanks / watch, sleepy, point, bye.
+لو غيّرت الصور، ارفع قيمة `ART_VERSION` في `src/components/zaki/ZakiAvatar.tsx` عشان المتصفحات تحمّلها من جديد.

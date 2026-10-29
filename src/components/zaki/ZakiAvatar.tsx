@@ -12,7 +12,7 @@ const drawingFallback: Partial<Record<ZakiMood, ZakiMood>> = {
 /** Drop PNG/WebP files named after each mood into public/zaki/ and they replace the built-in drawing automatically. */
 const FILE_BASE = "/zaki/";
 // Bump when the pictures change: browsers keep images for a week, so a new version needs a new address.
-const ART_VERSION = "shalaby-2";
+const ART_VERSION = "shalaby-3";
 const known = new Map<string, "ok" | "bad">();
 
 function useArt(mood: ZakiMood) {
