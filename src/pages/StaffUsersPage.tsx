@@ -847,7 +847,7 @@ export const StaffUsersPage: React.FC = () => {
               {/* Role & Org Position */}
               <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <h4 className="font-bold text-indigo-600 dark:text-indigo-400 text-xs">
-                  2. المسمى الوظيفي والتبعية الإدارية
+                  2. الدور والفرع
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -904,95 +904,6 @@ export const StaffUsersPage: React.FC = () => {
                   </div>
                   )}
 
-                  <div>
-                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
-                      القسم الداخلي
-                    </label>
-                    <select
-                      value={departmentId}
-                      onChange={(e) => {
-                        setDepartmentId(e.target.value);
-                        const keep = jobPositions.find((j) => j.id === jobPositionId);
-                        if (keep && e.target.value && keep.departmentId !== e.target.value) setJobPositionId("");
-                      }}
-                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl"
-                    >
-                      <option value="">كل الأقسام</option>
-                      {departmentEntities.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
-                      المسمى الوظيفي المحدد
-                    </label>
-                    <select
-                      value={jobPositionId}
-                      onChange={(e) => {
-                        setJobPositionId(e.target.value);
-                        const pos = jobPositions.find((j) => j.id === e.target.value);
-                        if (pos) setDepartmentId(pos.departmentId);
-                      }}
-                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl"
-                    >
-                      <option value="">{jobPositions.some((j) => j.active) ? "اختر الوظيفة" : "لا توجد مسميات بعد"}</option>
-                      {departmentEntities
-                        .filter((d) => !departmentId || d.id === departmentId)
-                        .map((d) => {
-                          const list = jobPositions.filter((j) => j.active && j.departmentId === d.id);
-                          return list.length ? (
-                            <optgroup key={d.id} label={d.name}>
-                              {list.map((j) => (
-                                <option key={j.id} value={j.id}>
-                                  {j.title}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ) : null;
-                        })}
-                    </select>
-                    {canManageOrganization(effectiveUser) && (
-                      <button
-                        type="button"
-                        onClick={() => setShowJobModal(true)}
-                        className="mt-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 cursor-pointer"
-                      >
-                        + مسمى وظيفي جديد
-                      </button>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
-                      المسؤول الإداري المباشر
-                    </label>
-                    <select
-                      value={directManagerId}
-                      onChange={(e) => setDirectManagerId(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl"
-                    >
-                      <option value="">بدون مدير مباشر أعلى</option>
-                      {users
-                        .filter(
-                          (u) =>
-                            u.active &&
-                            u.id !== editingUser?.id &&
-                            !["sales_agent", "team_leader"].includes(u.role) &&
-                            (!u.branchId || u.branchId === branchId),
-                        )
-                        .map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({positionNames[u.role]})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
                 </div>
               </div>
 
