@@ -602,13 +602,13 @@ test("accounting: only the owner/developer and accounts specialists see or chang
   }
 });
 
-test("telegram groups: managers change the directory, salespeople only read it, and everyone reaches the page", () => {
+test("telegram groups: managers change the directory and salespeople only read it (the screen itself is retired from the menu)", () => {
   const mk = (actor: User) => {
     const s = spy(["addTelegramGroup", "updateTelegramGroup", "setTelegramGroupActive", "removeTelegramGroup"]);
     return { ...fixture(actor, { telegramGroups: [], ...s.fns }), calls: s.calls };
   };
   for (const actor of [employee, manager, director, makeUser("supervisor", { id: "sup1", specialty: "accounts", branchId: employee.branchId })]) {
-    assert.equal(canAccessPage(mk(actor).view.effectiveUser, "telegram"), true, `everyone reaches the page (${actor.role})`);
+    assert.equal(canAccessPage(mk(actor).view.effectiveUser, "telegram"), false, `the page is retired (${actor.role})`);
   }
   for (const actor of [manager, director]) {
     const w = mk(actor);
@@ -631,9 +631,9 @@ test("telegram groups: managers change the directory, salespeople only read it, 
 test("the simplified CRM keeps customers, follow-ups and targets, and retires the other screens for everyone", () => {
   for (const actor of [director, developer, manager, employee]) {
     const u = fixture(actor).view.effectiveUser;
-    for (const page of ["visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports", "accounts", "branches", "permissions", "developer", "sales_statements", "dept_dashboard", "teams"])
+    for (const page of ["visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports", "accounts", "branches", "permissions", "developer", "sales_statements", "dept_dashboard", "teams", "telegram"])
       assert.equal(canAccessPage(u, page), false, `${actor.role}: ${page} is retired`);
-    for (const page of ["dashboard", "followups", "targets", "settings", "telegram"]) assert.equal(canAccessPage(u, page), true, `${actor.role}: ${page} stays`);
+    for (const page of ["dashboard", "followups", "targets", "settings"]) assert.equal(canAccessPage(u, page), true, `${actor.role}: ${page} stays`);
   }
   assert.equal(canAccessPage(fixture(employee).view.effectiveUser, "clients"), true);
   assert.equal(canAccessPage(fixture(developer).view.effectiveUser, "users"), true);

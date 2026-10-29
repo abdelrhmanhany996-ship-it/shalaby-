@@ -7,6 +7,7 @@ import { bucketize, priorityNames, priorityOf } from "../lib/followUps";
 import { formatMoney, today } from "../lib/presentation";
 import { monthOf, overview, targetable, targetStateNames } from "../lib/targets";
 import { openShalaby } from "../components/zaki/shalabyEvents";
+import { TargetBar } from "../components/common/TargetBar";
 
 interface Props {
   setActiveTab: (tab: string) => void;
@@ -88,6 +89,28 @@ export function HomePage({ setActiveTab, onOpenLead }: Props) {
         </div>
       </div>
 
+      {targetable(effectiveUser) && own && (
+        <section className="panel" style={{ marginBottom: 16, padding: "18px 20px" }} aria-label="هدفي هذا الشهر">
+          {mine?.target ? (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+                <span className="eyebrow">هدفك الشهر ده</span>
+                <strong style={{ fontSize: 22 }}>{formatMoney(mine.target)} ج.م</strong>
+              </div>
+              <div style={{ margin: "14px 0 10px" }}>
+                <TargetBar percent={mine.percent} expectedPercent={mine.expectedPercent} height={16} />
+              </div>
+              <p style={{ margin: 0 }}>
+                {mine.percent > 100 ? "⭐ " : ""}بعت <strong>{formatMoney(mine.achieved)}</strong> ج.م ({pct(mine.percent)})
+                {mine.percent > 100 ? ` · تخطّيت الهدف بـ ${formatMoney(mine.achieved - mine.target)} ج.م` : ` · فاضلك ${formatMoney(mine.remaining)} ج.م`}
+              </p>
+            </>
+          ) : (
+            <p style={{ margin: 0 }}>لسه ما اتحددلكش هدف للشهر ده. المدير هيحدده، وأول ما يتحدد هيظهر هنا وكل بيع بتسجّله بيتحسب منه.</p>
+          )}
+        </section>
+      )}
+
       <div className="home-grid">
         <section className="panel">
           <div className="panel-header">
@@ -149,9 +172,7 @@ export function HomePage({ setActiveTab, onOpenLead }: Props) {
                     <Target size={16} />
                     <div style={{ flex: 1 }}>
                       <strong>{r.user.name}</strong>
-                      <div className="department-bar">
-                        <i style={{ width: `${Math.min(100, r.percent)}%`, background: r.state === "achieved" ? "var(--buy)" : r.state === "on_track" ? "var(--wait)" : "var(--late)", opacity: 1 }} />
-                      </div>
+                      <TargetBar percent={r.percent} expectedPercent={r.expectedPercent} />
                     </div>
                     <span className="table-secondary">{pct(r.percent)}</span>
                   </div>
@@ -168,9 +189,7 @@ export function HomePage({ setActiveTab, onOpenLead }: Props) {
               <p>
                 <strong>{pct(mine.percent)}</strong> · {targetStateNames[mine.state]}
               </p>
-              <div className="department-bar">
-                <i style={{ width: `${Math.min(100, mine.percent)}%`, opacity: 1 }} />
-              </div>
+              <TargetBar percent={mine.percent} expectedPercent={mine.expectedPercent} height={14} />
               <p className="table-secondary" style={{ marginTop: 10 }}>
                 فاضلك {formatMoney(mine.remaining)} ج.م · المفروض توصل {pct(mine.expectedPercent)} لحد النهارده
               </p>

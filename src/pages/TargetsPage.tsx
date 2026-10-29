@@ -4,6 +4,7 @@ import { useCRM } from "../context/CRMContext";
 import { hasPermission, isSalesCapable } from "../lib/permissions";
 import { formatMoney, today } from "../lib/presentation";
 import { bucketOf } from "../lib/followUps";
+import { TargetBar, TargetLegend } from "../components/common/TargetBar";
 import { achievedFor, evaluate, monthOf, overview, shiftMonth, targetId, targetable, targetStateNames, type Performance, type TargetState } from "../lib/targets";
 
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("ar-EG", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -17,14 +18,7 @@ const stateColor: Record<TargetState, string> = {
 const stateClass: Record<TargetState, string> = { achieved: "is-success", on_track: "is-warning", behind: "is-new", missed: "is-new", no_target: "" };
 
 function Bar({ p }: { p: Performance }) {
-  return (
-    <div className="department-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.round(p.percent))} aria-label="نسبة الإنجاز" style={{ position: "relative" }}>
-      <i style={{ width: `${Math.min(100, p.percent)}%`, background: stateColor[p.state], opacity: 1 }} />
-      {p.expectedPercent > 0 && p.expectedPercent < 100 && (
-        <span title={`المفروض تكون هنا النهارده (${p.expectedPercent}%)`} style={{ position: "absolute", insetBlock: -3, insetInlineStart: `${p.expectedPercent}%`, width: 2, background: "var(--ink)", opacity: 0.55 }} />
-      )}
-    </div>
-  );
+  return <TargetBar percent={p.percent} expectedPercent={p.expectedPercent} />;
 }
 
 const pct = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 1 })}٪`;
@@ -123,6 +117,8 @@ export function TargetsPage() {
       {p.target > 0 && (
         <div style={{ padding: "0 20px 18px" }}>
           <Bar p={p} />
+          <div style={{ marginTop: 10 }}><TargetLegend /></div>
+          {p.percent > 100 && <p className="quiet-note" style={{ marginTop: 8 }}>⭐ تخطّى الهدف بـ {formatMoney(p.achieved - p.target)} ج.م</p>}
           {targetSettings.paceAware && p.expectedPercent > 0 && p.expectedPercent < 100 && (
             <p className="quiet-note" style={{ marginTop: 8 }}>
               الخط الأسود هو المكان المفروض توصله النهارده ({pct(p.expectedPercent)}) حسب اللي عدّى من الشهر.

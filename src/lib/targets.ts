@@ -208,3 +208,40 @@ export function monthHistory(userId: string, month: string, count: number, targe
     return { month: m, ...p };
   });
 }
+
+/** What one employee achieved between two dates (inclusive), by the same rules as a month. */
+export function achievedBetween(userId: string, from: string, to: string, bookings: Booking[], settings: TargetSettings): { amount: number; purchases: number } {
+  const wanted = settings.departments.length ? settings.departments : departmentIds;
+  const seen = new Set<string>();
+  let amount = 0;
+  let purchases = 0;
+  for (const b of bookings) {
+    const d = b.bookingDate.slice(0, 10);
+    if (seen.has(b.id) || b.agentId !== userId || d < from || d > to) continue;
+    seen.add(b.id);
+    if (b.bookingStatus === "cancelled" || b.paymentStatus === "refunded") continue;
+    const split = bookingSplit(b);
+    const counted = wanted.reduce((s, dep) => s + (split[dep] || 0), 0);
+    amount += counted;
+    if (counted > 0) purchases++;
+  }
+  return { amount, purchases };
+}
+
+/**
+ * The target for a period: each month the period touches contributes its monthly target for the days of it that fall
+ * inside the period, so a whole month gives exactly the monthly target and a week gives its share.
+ */
+export function targetForPeriod(userId: string, from: string, to: string, targets: EmployeeTarget[], settings: TargetSettings): number {
+  if (to < from) return 0;
+  let total = 0;
+  for (let m = monthOf(from); m <= monthOf(to); m = shiftMonth(m, 1)) {
+    const row = targets.find((t) => t.id === targetId(userId, m));
+    const amount = row ? row.amount : settings.defaultAmount;
+    const dim = daysInMonth(m);
+    const start = m === monthOf(from) ? Number(from.slice(8, 10)) : 1;
+    const end = monthOf(to) === m ? Number(to.slice(8, 10)) : dim;
+    total += (amount * Math.max(0, end - start + 1)) / dim;
+  }
+  return Math.round(total);
+}

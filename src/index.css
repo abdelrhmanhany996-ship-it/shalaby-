@@ -2690,3 +2690,30 @@
 .purchase-total { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 12px; background: var(--buy-soft); color: var(--buy-ink); font-size: 15px; }
 .purchase-total strong { font-size: 18px; }
 @media (max-width: 720px) { .purchase-line { grid-template-columns: 1fr 1fr; } .purchase-line input:first-child { grid-column: 1 / -1; } .purchase-line .icon-button { justify-self: end; } }
+
+
+/* ---- target progress bar: red -> orange -> yellow -> green, glowing green with a star above the target ---- */
+.target-bar { position: relative; height: 12px; border-radius: 999px; background: rgba(120,120,120,.18); overflow: visible; }
+.target-bar > i { display: block; height: 100%; border-radius: inherit; transition: width .5s ease, background-color .3s; }
+.target-bar.tb-red > i { background: #d62b34; }
+.target-bar.tb-orange > i { background: #f08a24; }
+.target-bar.tb-yellow > i { background: #f2c200; }
+.target-bar.tb-green > i { background: #17a34a; }
+.target-bar.tb-shine > i {
+  background: linear-gradient(90deg, #12923f, #36d46b 45%, #12923f);
+  background-size: 200% 100%;
+  box-shadow: 0 0 10px 2px rgba(54, 212, 107, .65);
+  animation: tb-shine 2.2s linear infinite;
+}
+.target-bar .tb-pace { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink, #232321); opacity: .5; }
+.target-bar .tb-star {
+  position: absolute; inset-inline-end: -6px; top: 50%; transform: translateY(-50%);
+  font-size: 22px; line-height: 1; color: #ffc928; text-shadow: 0 0 6px rgba(255, 201, 40, .9), 0 1px 0 rgba(0,0,0,.25);
+  animation: tb-pop 1.6s ease-in-out infinite;
+}
+@keyframes tb-shine { from { background-position: 0 0; } to { background-position: -200% 0; } }
+@keyframes tb-pop { 0%, 100% { transform: translateY(-50%) scale(1); } 50% { transform: translateY(-50%) scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .target-bar.tb-shine > i, .target-bar .tb-star { animation: none; } }
+.target-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .75rem; opacity: .85; }
+.target-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-inline-end: 5px; vertical-align: -1px; background: var(--c); }
+@media print { .no-print, .sidebar, .mobile-nav, .zaki-fab-wrap, .zaki-panel, header.navbar { display: none !important; } }

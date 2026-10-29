@@ -331,7 +331,7 @@ export function planFollowUpDone(args: Args, d: PlanData): Plan {
   };
 }
 
-export function planFollowUpMove(args: Args, d: PlanData, managerOk: boolean): Plan {
+export function planFollowUpMove(args: Args, d: PlanData, managerOk = false): Plan {
   const { followUp: f, stop } = findFollowUp(args, d, !managerOk);
   if (stop) return stop;
   const date = args.new_date;

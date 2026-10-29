@@ -97,3 +97,39 @@ test("one satisfaction call a week after the sale, and it never raises a reminde
   const normal = fu({ id: "n", scheduledAt: "2026-10-20", status: "overdue" });
   assert.deepEqual(pendingReminders([call, normal], "u1", "2026-10-29", "10:00").map((r) => r.followUp.id), ["n"]);
 });
+
+import { progressTone } from "../src/lib/progress";
+import { achievedBetween, targetForPeriod } from "../src/lib/targets";
+import { periodReport, periods, reportText } from "../src/lib/salesReport";
+import { defaultTargetSettings } from "../src/lib/targets";
+
+test("bar colours follow the thresholds: red, orange, yellow, green, glowing green with a star above the target", () => {
+  const t = (p: number) => progressTone(p).tone;
+  assert.deepEqual([0, 20, 21, 50, 51, 75, 76, 100].map(t), ["red", "red", "orange", "orange", "yellow", "yellow", "green", "green"]);
+  assert.equal(t(100.1), "shine");
+  assert.equal(progressTone(100).over, false);
+  assert.equal(progressTone(150).over, true);
+});
+
+test("a target for a period counts the month's target for the days inside it", () => {
+  const targets = [{ id: "tgt-u1-2026-10", userId: "u1", amount: 3100000 }, { id: "tgt-u1-2026-11", userId: "u1", amount: 3000000 }] as any[];
+  const s = { ...defaultTargetSettings, defaultAmount: 0 };
+  assert.equal(targetForPeriod("u1", "2026-10-01", "2026-10-31", targets, s), 3100000);
+  assert.equal(targetForPeriod("u1", "2026-10-25", "2026-10-31", targets, s), 700000);
+  assert.equal(targetForPeriod("u1", "2026-10-31", "2026-11-01", targets, s), 100000 + 100000);
+  assert.equal(targetForPeriod("u2", "2026-10-01", "2026-10-31", targets, s), 0);
+});
+
+test("the money report: sold between the dates against the target, best first, cancelled ignored", () => {
+  const users = [{ id: "u1", name: "أحمد", role: "sales_agent", active: true }, { id: "u2", name: "منى", role: "sales_agent", active: true }] as User[];
+  const bk = (id: string, agentId: string, amount: number, bookingDate: string, bookingStatus = "completed") => ({ id, agentId, amount, bookingDate, bookingStatus, departmentAmounts: { general: amount } }) as unknown as Booking;
+  const bookings = [bk("1", "u1", 400000, "2026-10-05"), bk("2", "u1", 700000, "2026-10-20"), bk("3", "u1", 99999, "2026-10-21", "cancelled"), bk("4", "u1", 50000, "2026-09-30"), bk("5", "u2", 250000, "2026-10-10")];
+  const targets = [{ id: "tgt-u1-2026-10", userId: "u1", amount: 1000000 }, { id: "tgt-u2-2026-10", userId: "u2", amount: 1000000 }] as any[];
+  assert.deepEqual(achievedBetween("u1", "2026-10-01", "2026-10-31", bookings, defaultTargetSettings), { amount: 1100000, purchases: 2 });
+  const r = periodReport({ users, bookings, targets, settings: defaultTargetSettings, ...periods.month("2026-10-29") });
+  assert.deepEqual(r.rows.map((x) => [x.name, x.sold, x.target, x.percent, x.tone, x.over]), [["أحمد", 1100000, 1000000, 110, "shine", true], ["منى", 250000, 1000000, 25, "orange", false]]);
+  assert.deepEqual(r.total, { sold: 1350000, deals: 3, target: 2000000, percent: 67.5 });
+  assert.match(reportText(r, "2026-10-01", "2026-10-31"), /أحمد: باع 1,100,000 ج.م من هدف 1,000,000 \(110٪\) ⭐/);
+  assert.deepEqual(periods.week("2026-10-29"), { from: "2026-10-24", to: "2026-10-30" });
+  assert.deepEqual(periods.lastMonth("2026-10-29"), { from: "2026-09-01", to: "2026-09-30" });
+});

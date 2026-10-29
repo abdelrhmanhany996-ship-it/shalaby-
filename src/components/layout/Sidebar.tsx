@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ShieldCheck,
   Target,
-  Send,
   FileText,
   BarChart3,
 } from "lucide-react";
@@ -110,9 +109,8 @@ export function Sidebar({
             count,
           )}
           {nav("quotes", "عروض الأسعار", FileText)}
-          {nav("team_sales", worksOwnCustomers(effectiveUser) && !hasPermission(effectiveUser, "targets.view") ? "مبيعاتي" : "مبيعات الأسبوع", BarChart3)}
+          {nav("team_sales", worksOwnCustomers(effectiveUser) && !hasPermission(effectiveUser, "targets.view") ? "مبيعاتي" : "تقرير المبيعات", BarChart3)}
           {nav("targets", hasPermission(effectiveUser, "targets.view") ? "الأهداف والأداء" : "هدفي", Target)}
-          {nav("telegram", "جروبات التليجرام", Send)}
           {["users", "audit", "permissions", "developer"].some((page) => canAccessPage(effectiveUser, page)) && (
             <details className="nav-management" open={["users", "audit", "permissions", "developer"].includes(activeTab) || undefined}>
               <summary>
