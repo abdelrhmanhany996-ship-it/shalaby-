@@ -8,7 +8,13 @@ const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 
 const slashDate = (d: string) => d.replaceAll("-", "/");
 
 /** The printable page of a quote, laid out like the company's paper statement. */
-export function quoteHtml(q: Quote): string {
+/** The app's own font, loaded from the site the page was opened from (the print window has no other way to find it). */
+const fontFaces = (base: string) =>
+  [400, 600, 700]
+    .map((w) => `@font-face{font-family:'IBM Plex Sans Arabic';font-weight:${w};src:url('${base}/fonts/ibm-plex-sans-arabic-arabic-${w === 600 ? 600 : w}-normal.woff2') format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC}@font-face{font-family:'IBM Plex Sans Arabic';font-weight:${w};src:url('${base}/fonts/ibm-plex-sans-arabic-latin-${w}-normal.woff2') format('woff2');unicode-range:U+0000-00FF,U+2000-206F}`)
+    .join("");
+
+export function quoteHtml(q: Quote, fontBase = ""): string {
   const c = quoteCompany;
   const rows = q.lines
     .map((l, i) => {
@@ -19,9 +25,10 @@ export function quoteHtml(q: Quote): string {
     .join("");
   return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(c.title)} ${esc(q.number)}</title>
 <style>
+  ${fontFaces(fontBase)}
   @page { size: A4; margin: 0 }
   * { box-sizing: border-box }
-  body { font-family: "Cairo", "Segoe UI", Tahoma, sans-serif; margin: 0; color: #1b1b1b }
+  body { font-family: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif; margin: 0; color: #1b1b1b }
   .head { display: flex; align-items: center; justify-content: space-between; padding: 28px 40px; border-bottom: 6px solid #6aa84f; direction: ltr }
   .brand b { font-size: 34px; letter-spacing: 1px } .brand span { display: block; font-size: 11px; letter-spacing: 6px; color: #555 }
   .contact { font-size: 11px; color: #444; line-height: 1.6; text-align: left }
@@ -58,7 +65,7 @@ export function printQuote(q: Quote): boolean {
   const w = window.open("", "_blank");
   if (!w) return false;
   w.document.open();
-  w.document.write(quoteHtml(q));
+  w.document.write(quoteHtml(q, window.location.origin));
   w.document.close();
   w.focus();
   // Give the page a moment to lay out before the print dialog opens.

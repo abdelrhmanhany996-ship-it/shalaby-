@@ -38,10 +38,21 @@ export async function voiceStatus(): Promise<boolean> {
 }
 
 async function call(init: RequestInit): Promise<any> {
-  const res = await fetch(ENDPOINT, {
-    ...init,
-    headers: { ...(init.headers || {}), ...(await authHeader()) },
-  });
+  // A slow or stuck answer ends with an error after a minute instead of a spinner that never stops.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 70_000);
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      ...init,
+      signal: ctrl.signal,
+      headers: { ...(init.headers || {}), ...(await authHeader()) },
+    });
+  } catch (e) {
+    throw new Error(e instanceof DOMException && e.name === "AbortError" ? "timeout" : "network");
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok && data?.error === "rate_limited") {
     throw new Error(data?.detail === "day" ? "وصلت للحد اليومي لطلبات الذكاء الاصطناعي، جرّب بكرة." : "طلبات كتير في وقت قصير، جرّب بعد شوية.");

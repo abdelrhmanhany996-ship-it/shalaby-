@@ -111,9 +111,9 @@ export function parseItems(raw: unknown): { lines: PurchaseLine[]; problem?: str
 }
 
 const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
-/** Two short lines per item for the confirmation card: the name, then pieces x price = total. */
+/** Two short lines per item for the confirmation card: the name, then quantity · price · total in words (no operators, so Arabic and digits never reorder). */
 const itemLines = (lines: PurchaseLine[]): string[] =>
-  lines.flatMap((l) => [l.name, `${[l.qty ? `${num(l.qty)} قطعة` : "", l.price ? `× ${num(l.price)}` : ""].filter(Boolean).join(" ")}${l.qty || l.price ? " = " : ""}${num(l.total)} ج.م`]);
+  lines.flatMap((l) => [l.name, [l.qty ? `الكمية ${num(l.qty)}` : "", l.price ? `سعر القطعة ${num(l.price)}` : "", `الإجمالي ${num(l.total)} ج.م`].filter(Boolean).join(" · ")]);
 
 let counter = 0;
 const newId = () => `act-${Date.now().toString(36)}-${(counter++).toString(36)}`;
