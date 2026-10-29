@@ -5,14 +5,62 @@ import { today } from "../lib/presentation";
 import { SalesReportView } from "../components/common/SalesReportView";
 import { periodReport, periods, reportText } from "../lib/salesReport";
 import { weeklyTeamSales } from "../lib/teamSales";
+import { progressTone } from "../lib/progress";
+import type { ReportRow } from "../lib/salesReport";
+import type { WeeklyReport } from "../types/crm";
 import { isSales } from "../lib/access";
 
 type Preset = "week" | "month" | "lastMonth" | "custom";
 const names: Record<Preset, string> = { week: "الأسبوع ده", month: "الشهر ده", lastMonth: "الشهر اللي فات", custom: "من تاريخ لتاريخ" };
 
 /** The money report: what each person sold between two dates, from what target. */
+const parse = <T,>(json: string, fallback: T): T => {
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+/** The reports the server made by itself every week: newest first, each opens into the same table. */
+function WeeklyReports({ reports }: { reports: WeeklyReport[] }) {
+  const [open, setOpen] = useState("");
+  const list = [...reports].sort((a, b) => b.from.localeCompare(a.from)).slice(0, 8);
+  return (
+    <section className="panel no-print" style={{ marginTop: 20 }}>
+      <div className="panel-header">
+        <div>
+          <h2>التقارير الأسبوعية التلقائية</h2>
+          <p>بتتعمل لوحدها كل جمعة بالليل (السبت للجمعة) ومحفوظة هنا.</p>
+        </div>
+      </div>
+      {list.length === 0 ? (
+        <p className="quiet-note" style={{ padding: "0 20px 16px" }}>لسه مفيش تقرير اتعمل. أول واحد هيظهر هنا أول جمعة بعد تفعيل الجدولة على السيرفر.</p>
+      ) : (
+        list.map((r) => {
+          const rows = parse<ReportRow[]>(r.rowsJson, []).map((x) => ({ ...x, ...progressTone(x.target > 0 ? x.percent : 0) }));
+          const total = parse(r.totalJson, { sold: 0, deals: 0, target: 0, percent: 0 });
+          return (
+            <div key={r.id} style={{ borderTop: "1px solid var(--line, #e5e5e5)" }}>
+              <button className="btn-text" style={{ width: "100%", justifyContent: "space-between", padding: "12px 20px" }} aria-expanded={open === r.id} onClick={() => setOpen(open === r.id ? "" : r.id)}>
+                <span>
+                  {r.from} ← {r.to}
+                </span>
+                <span>
+                  {total.sold.toLocaleString("en-US")} ج.م{total.target ? ` من ${total.target.toLocaleString("en-US")} (${total.percent}٪)` : ""}
+                </span>
+              </button>
+              {open === r.id && <SalesReportView rows={rows} total={total} from={r.from} to={r.to} />}
+            </div>
+          );
+        })
+      )}
+    </section>
+  );
+}
+
 export function TeamSalesPage() {
-  const { effectiveUser, targetUsers, bookings, quotes, employeeTargets, targetSettings } = useCRM();
+  const { effectiveUser, targetUsers, bookings, quotes, employeeTargets, targetSettings, weeklyReports } = useCRM();
   const now = today();
   const [preset, setPreset] = useState<Preset>("month");
   const [custom, setCustom] = useState({ from: periods.month(now).from, to: now });
@@ -96,6 +144,7 @@ export function TeamSalesPage() {
           اختار تاريخ البداية قبل تاريخ النهاية.
         </p>
       )}
+      {(weeklyReports.length > 0 || ["admin", "general_manager", "regional_manager"].includes(effectiveUser.role)) && <WeeklyReports reports={weeklyReports} />}
     </>
   );
 }

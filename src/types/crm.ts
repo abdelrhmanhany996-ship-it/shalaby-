@@ -826,3 +826,14 @@ export interface Quote {
   createdAt: string;
   updatedAt: string;
 }
+
+/** The weekly sales report the server makes by itself (api/weekly.php). Rows and totals are JSON text. */
+export interface WeeklyReport {
+  id: string;
+  from: string;
+  to: string;
+  createdAt: string;
+  text: string;
+  rowsJson: string;
+  totalJson: string;
+}

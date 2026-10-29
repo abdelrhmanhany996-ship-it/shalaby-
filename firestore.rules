@@ -327,6 +327,12 @@ service cloud.firestore {
       allow delete: if isManager() && branchOk(resource.data.branchId);
     }
 
+    // The weekly report is written by the server (service account bypasses rules); only the owner and the general sales manager read it.
+    match /weeklyReports/{docId} {
+      allow read: if isRegional();
+      allow write: if false;
+    }
+
     // Price quotes: a salesperson's own, a manager's whole scope.
     match /quotes/{docId} {
       allow read: if rowOk(resource.data, 'agentId');

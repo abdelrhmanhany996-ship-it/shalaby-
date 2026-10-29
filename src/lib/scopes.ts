@@ -48,7 +48,7 @@ export function rowScope(p: ScopeProfile, ownerField: string, extra: ScopeFilter
 export function scopesFor(p: ScopeProfile | null) {
   if (!p) {
     const none: Scope = "none";
-    return { salesStatements: none, employeeTargets: none, accounting: none, leads: none, followUps: none, quotes: none, visits: none, bookings: none, invoices: none, notBought: none, reminderDone: none, aiSuggestions: none, reviews: none, reviewNotes: none, timeline: none, brokers: none, users: none, notifications: none, audit: none };
+    return { salesStatements: none, employeeTargets: none, accounting: none, leads: none, followUps: none, quotes: none, weeklyReports: none, visits: none, bookings: none, invoices: none, notBought: none, reminderDone: none, aiSuggestions: none, reviews: none, reviewNotes: none, timeline: none, brokers: none, users: none, notifications: none, audit: none };
   }
   const all = seesAll(p);
   const branches = scopeBranches(p);
@@ -60,6 +60,7 @@ export function scopesFor(p: ScopeProfile | null) {
     leads: rowScope(p, "assignedAgentId", [[["delegatedTo", "array-contains", p.userId]]]),
     followUps: rowScope(p, "assignedAgentId"),
     quotes: rowScope(p, "agentId"),
+    weeklyReports: (seesAll(p) ? "all" : "none") as Scope,
     visits: rowScope(p, "receivedByAgentId"),
     bookings: rowScope(p, "agentId"),
     invoices: rowScope(p, "agentId"),

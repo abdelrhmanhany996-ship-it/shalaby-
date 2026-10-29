@@ -35,3 +35,12 @@
 ## قسم المطورين: استهلاك الذكاء الاصطناعي
 السيرفر يسجّل كل طلب (التوكنز فقط، بلا محتوى) في `domains/<الموقع>/crm-ai-usage.jsonl`. الصفحة تعرضه لآخر 30 يومًا مع تكلفة تقريبية بأسعار قابلة للتعديل،
 وحاسبة «ماذا لو؟» (مستخدمين × أسئلة × خطوات × صوت × ملخصات).
+
+## التقرير الأسبوعي التلقائي (`api/weekly.php`)
+بيتعمل لوحده كل جمعة بالليل (السبت للجمعة) من غير ما حد يفتح التطبيق: كل بايع باع بكام من هدف كام. بيتحفظ في `weeklyReports` ويظهر في «تقرير المبيعات» للمالك ومدير المبيعات العام، وبيتبعت على تليجرام لو اتضبط.
+
+- **الجدولة (Hostinger ← Cron Jobs):** `0 17 * * 5` والأمر `/usr/bin/php /home/<user>/domains/<الدومين>/public_html/<فولدر الموقع>/api/weekly.php`. (17:00 UTC = 7 مساءً بتوقيت القاهرة شتاءً، 8 صيفًا.) الجدولة الحالية على موقع التجربة `shalaby-tests-site`؛ لما نرقّي للإنتاج غيّر الفولدر.
+- **الصلاحية:** نفس ملف `crm-firebase-admin.json` بتاع `api/admin.php`، جنب `public_html`. المفتاح من Firebase Console ← Project settings ← Service accounts ← Generate new private key، والدور «Cloud Datastore User». من غيره السكربت بيطبع `service_account_missing` وما بيعملش حاجة.
+- **تجربة بدون حفظ:** `php api/weekly.php --dry` بيطبع التقرير بس. ولفترة معينة: `--from=2026-10-24 --to=2026-10-30`.
+- **تليجرام (اختياري):** ملف `crm-weekly.php` جنب `public_html`: `<?php return ['telegram_chat_id' => '-100…'];` والبوت متظبط (`crm-telegram-secrets.php`).
+- لازم تنشر `firestore.rules` (فيها `weeklyReports` للقراءة بس).

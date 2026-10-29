@@ -533,6 +533,7 @@ export function createWorkspace(raw: CRMContextType) {
       return raw.addBooking(data);
     }) as CRMContextType["addBooking"],
     quotes,
+    weeklyReports: access.isGlobalManager(actor) || actor.role === "regional_manager" ? raw.weeklyReports ?? [] : [],
     saveQuote: ((input, opts) => {
       const lead = findLead(input.leadId);
       require(access.canEditCustomer(actor, lead));

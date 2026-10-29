@@ -38,6 +38,7 @@ before(async () => {
     await setDoc(doc(f, "leads", "L3"), { id: "L3", branchId: "b2", assignedAgentId: userId("agentC"), name: "C1", phone: "3" });
     await setDoc(doc(f, "followUps", "F1"), { id: "F1", branchId: "b1", assignedAgentId: userId("agentA") });
     await setDoc(doc(f, "quotes", "Q1"), { id: "Q1", branchId: "b1", agentId: userId("agentA"), status: "sent" });
+    await setDoc(doc(f, "weeklyReports", "2026-10-24"), { id: "2026-10-24", from: "2026-10-24", to: "2026-10-30" });
     await setDoc(doc(f, "users", userId("agentA")), { id: userId("agentA"), branchId: "b1", role: "sales_agent" });
     await setDoc(doc(f, "users", userId("agentC")), { id: userId("agentC"), branchId: "b2", role: "sales_agent" });
     await setDoc(doc(f, "users", userId("dev")), { id: userId("dev"), role: "admin" });
@@ -400,4 +401,10 @@ test("quotes: a salesperson sees and writes only their own, a branch manager the
   await assertFails(getDocs(query(collection(db("bm1"), "quotes"), where("branchId", "==", "b2"))));
   await assertSucceeds(getDocs(collection(db("regional"), "quotes")));
   await assertFails(getDocs(collection(db(null), "quotes")));
+});
+
+test("weekly reports: only the owner and the general sales manager read them, and nobody writes from the app", async () => {
+  for (const k of ["gm", "regional", "dev"]) await assertSucceeds(getDoc(doc(db(k), "weeklyReports", "2026-10-24")));
+  for (const k of ["bm1", "agentA", "sup"]) await assertFails(getDoc(doc(db(k), "weeklyReports", "2026-10-24")));
+  await assertFails(setDoc(doc(db("gm"), "weeklyReports", "x"), { id: "x" }));
 });

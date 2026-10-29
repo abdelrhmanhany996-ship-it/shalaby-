@@ -56,6 +56,7 @@ import {
   PurchaseLine,
   Quote,
   QuoteStatus,
+  WeeklyReport,
   EmployeeTarget,
   TelegramGroup,
   SalesStatement,
@@ -214,6 +215,8 @@ export interface CRMContextType {
 
   // Price quotes
   quotes: Quote[];
+  /** Made by the server every week; only the owner and the general sales manager receive them. */
+  weeklyReports: WeeklyReport[];
   /** Creates a quote, or updates one (only while it is a draft or sent). With `send` it is also marked as sent. */
   saveQuote: (input: QuoteInput, opts?: { id?: string; send?: boolean }) => Quote;
   setQuoteStatus: (id: string, status: Exclude<QuoteStatus, "accepted">, lostReason?: string) => void;
@@ -358,6 +361,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     () => loadStorage("purchase_invoices", []),
   );
   const [quotes, setQuotes] = useState<Quote[]>(() => loadStorage("quotes", []));
+  const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>(() =>
     loadStorage("notifications", []),
   );
@@ -466,6 +470,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   useFirestoreCollection("followUps", followUps, setFollowUps, { scope: scope.followUps });
   useFirestoreCollection("bookings", bookings, setBookings, { scope: scope.bookings });
   useFirestoreCollection("quotes", quotes, setQuotes, { scope: scope.quotes });
+  useFirestoreCollection("weeklyReports", weeklyReports, setWeeklyReports, { scope: scope.weeklyReports });
   useFirestoreCollection("timelineEvents", timelineEvents, setTimelineEvents, { scope: scope.timeline });
   useFirestoreCollection("activityLogs", auditLogs, setAuditLogs, { scope: scope.audit });
   useFirestoreCollection("telegramGroups", telegramGroups, setTelegramGroups, { scope: "all" });
@@ -2220,6 +2225,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
         purchaseInvoices,
         notifications,
         quotes,
+        weeklyReports,
         saveQuote,
         setQuoteStatus,
         acceptQuote,
