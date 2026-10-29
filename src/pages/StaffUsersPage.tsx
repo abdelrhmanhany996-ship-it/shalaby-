@@ -163,7 +163,8 @@ export const StaffUsersPage: React.FC = () => {
     setSupervisedBranchIds([]);
     setCompanyId(companies[0]?.id || "");
     setGovernorateId(branches[0]?.governorateId || "");
-    setBranchId(branches[0]?.id || "");
+    // No branch field: a new employee joins the branch of whoever adds them (or the first branch for the owner).
+    setBranchId(branches.find((b) => b.id === effectiveUser.branchId)?.id || branches[0]?.id || "");
     setTeamId("");
     setDepartmentId("");
     setJobPositionId("");
@@ -867,40 +868,6 @@ export const StaffUsersPage: React.FC = () => {
 
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {editingUser || branches.length < 2 ? null : ["admin", "general_manager", "regional_manager"].includes(role) ? (
-                    <p className="text-xs text-slate-600 dark:text-slate-400 sm:col-span-2 bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
-                      الدور ده بيشتغل على كل الفروع، فمش محتاج فرع محدد.
-                    </p>
-                  ) : (
-                  <div>
-                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">
-                      الفرع المباشر *
-                    </label>
-                    <select
-                      value={branchId}
-                      onChange={(e) => {
-                        setBranchId(e.target.value);
-                        setTeamId("");
-                        setDirectManagerId("");
-                        const branch = branches.find(
-                          (b) => b.id === e.target.value,
-                        );
-                        setGovernorateId(branch?.governorateId || "");
-                        setCompanyId(branch?.companyId || "");
-                      }}
-                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl font-semibold"
-                    >
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  )}
-
-                </div>
               </div>
 
               {canSetTarget && (
