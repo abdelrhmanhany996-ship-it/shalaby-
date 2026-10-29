@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { ShalabyLogo } from "../common/ShalabyLogo";
+import { Credit } from "../common/Credit";
 import { followUpStatus } from "../../lib/presentation";
 
 interface Props {
@@ -126,9 +127,7 @@ export function Sidebar({
         </nav>
         <div className="sidebar-bottom">
           {nav("settings", "الإعدادات", Settings)}
-          <p>
-            شلبي <span>·</span> العملاء والمتابعات والأهداف
-          </p>
+          <Credit />
         </div>
       </aside>
     </>

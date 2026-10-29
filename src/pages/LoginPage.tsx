@@ -3,6 +3,7 @@ import { KeyRound, Loader2, LogOut, ShieldAlert } from 'lucide-react';
 import { ChangePasswordForm } from '../components/common/ChangePasswordForm';
 import { isValidLoginId } from '../lib/loginId';
 import { ShalabyLogo } from '../components/common/ShalabyLogo';
+import { Credit } from '../components/common/Credit';
 import { authErrorMessage, useAuth } from '../context/AuthContext';
 
 type Mode = 'login' | 'forgot' | 'setup';
@@ -13,7 +14,7 @@ const inputCls =
 const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
     dir="rtl"
-    className="min-h-screen bg-[#07090e] flex items-center justify-center p-4 text-[#dfe2ee] font-sans"
+    className="min-h-screen bg-[#07090e] flex flex-col items-center justify-center p-4 text-[#dfe2ee] font-sans"
   >
     <div className="w-full max-w-sm bg-[#1d1d1c] border border-white/10 rounded-2xl p-6 shadow-2xl">
       <div className="flex justify-center mb-5">
@@ -21,6 +22,7 @@ const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
       </div>
       {children}
     </div>
+    <Credit tone="dark" className="mt-5" />
   </div>
 );
 

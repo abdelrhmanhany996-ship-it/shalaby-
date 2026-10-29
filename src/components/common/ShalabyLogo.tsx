@@ -21,7 +21,7 @@ export function ShalabyLogo({
         <span className="wordmark-square" aria-hidden="true" />
       </span>
       {showText && (
-        <span className="wordmark-description">إدارة المبيعات</span>
+        <span className="wordmark-description">نظام إدارة المبيعات الذكي</span>
       )}
     </div>
   );

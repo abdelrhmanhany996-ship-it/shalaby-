@@ -2717,3 +2717,21 @@
 .target-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .75rem; opacity: .85; }
 .target-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-inline-end: 5px; vertical-align: -1px; background: var(--c); }
 @media print { .no-print, .sidebar, .mobile-nav, .zaki-fab-wrap, .zaki-panel, header.navbar { display: none !important; } }
+
+
+/* ---- the logo: a little bigger, with the full product name under it ---- */
+.wordmark-lg .wordmark-name { font-size: 46px; padding: 0 15px 6px; }
+.wordmark-xl .wordmark-name { font-size: 54px; padding: 0 18px 7px; }
+.wordmark-lg .wordmark-description, .wordmark-xl .wordmark-description { font-size: 12.5px; font-weight: 600; margin-top: 7px; letter-spacing: .1px; }
+.wordmark-lg { min-width: 150px; }
+
+/* ---- the maker's line ---- */
+.credit { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 10px 2px; text-align: center; }
+.credit .credit-by { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--muted); font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif; }
+.credit .credit-by b { color: #c8232b; font-weight: 700; letter-spacing: .6px; }
+.credit .credit-dot { width: 7px; height: 7px; background: #c8232b; display: inline-block; animation: credit-pulse 2.8s ease-in-out infinite; }
+.credit small { font-size: 10px; color: var(--muted); opacity: .85; }
+.credit.is-dark .credit-by, .credit.is-dark small { color: #8d9197; }
+.credit.is-dark .credit-by b { color: #e04a52; }
+@keyframes credit-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .credit .credit-dot { animation: none; } }
