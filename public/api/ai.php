@@ -262,10 +262,21 @@ function gemini_error(int $status, array $data): string {
     return 'gemini_' . $status . ': ' . mb_substr((string) ($data['error']['message'] ?? 'no_message'), 0, 220);
 }
 
-/** Gemini is used for audio only (Claude does not accept audio). */
-function gemini(array $cfg, array $parts, array $generation = [], ?string $system = null, array $history = []): string {
+/**
+ * Which model answers text: Claude when its key is set; otherwise Gemini (so the assistant still works on a server that
+ * only has the Gemini key). Audio always goes to Gemini, because Claude does not accept audio.
+ */
+function text_provider(array $cfg): string {
+    return !empty($cfg['claude_key']) ? 'claude' : 'gemini';
+}
+
+function gemini_text_model(array $cfg): string {
+    return preg_match('/^[a-z0-9.\-]+$/i', (string) ($cfg['gemini_text_model'] ?? '')) ? $cfg['gemini_text_model'] : 'gemini-2.5-flash';
+}
+
+function gemini(array $cfg, array $parts, array $generation = [], ?string $system = null, array $history = [], ?string $modelOverride = null): string {
     if (empty($cfg['gemini_key']) || !is_string($cfg['gemini_key'])) fail(503, 'voice_not_configured');
-    $model = preg_match('/^[a-z0-9.\-]+$/i', (string) ($cfg['gemini_model'] ?? '')) ? $cfg['gemini_model'] : 'gemini-2.5-flash-lite';
+    $model = $modelOverride ?? (preg_match('/^[a-z0-9.\-]+$/i', (string) ($cfg['gemini_model'] ?? '')) ? $cfg['gemini_model'] : 'gemini-2.5-flash-lite');
     [$status, $data] = http_json(
         "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
         ['x-goog-api-key: ' . $cfg['gemini_key']],
@@ -318,6 +329,12 @@ function claude_text(array $data): string {
 
 /** A single-shot Claude call whose answer must be one JSON object. Returns the decoded array (or fails with ai_unavailable). */
 function claude_json(array $cfg, string $tier, string $system, string $user, int $maxTokens = 1200): array {
+    if (text_provider($cfg) === 'gemini') {
+        $out = gemini($cfg, [['text' => $user]], ['responseMimeType' => 'application/json', 'temperature' => 0.2], $system, [], gemini_text_model($cfg));
+        $r = json_decode($out, true);
+        if (!is_array($r)) fail(502, 'ai_unavailable', 'bad_json');
+        return $r;
+    }
     $data = claude_call($cfg, $tier, $system . "\n\nأعد كائن JSON واحد فقط بدون أي نص قبله أو بعده ولا علامات ```.", [['role' => 'user', 'content' => $user]], [], $maxTokens);
     $text = claude_text($data);
     $start = strpos($text, '{');
@@ -402,7 +419,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['usage'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $out = ['configured' => !empty($cfg['claude_key']), 'voice' => !empty($cfg['gemini_key'])];
+    $out = ['configured' => !empty($cfg['claude_key']) || !empty($cfg['gemini_key']), 'voice' => !empty($cfg['gemini_key']), 'provider' => $cfg === null ? null : text_provider($cfg)];
     echo json_encode($out, JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -501,6 +518,14 @@ if ($mode === 'agent') {
     }
     foreach ($contents as &$c) $c['parts'] = normalize_parts($c['parts']);
     unset($c);
+    $geminiDecls = [];
+    foreach ($json['tools'] ?? [] as $t) {
+        if (!is_array($t) || !preg_match('/^[a-z_]{1,40}$/', (string) ($t['name'] ?? ''))) fail(400, 'bad_request');
+        $params = is_array($t['parameters'] ?? null) ? $t['parameters'] : ['type' => 'OBJECT'];
+        $params['properties'] = as_object($params['properties'] ?? []);
+        if (empty($params['required'])) unset($params['required']);
+        $geminiDecls[] = ['name' => $t['name'], 'description' => mb_substr((string) ($t['description'] ?? ''), 0, 700), 'parameters' => $params];
+    }
     $tools = [];
     foreach ($json['tools'] ?? [] as $t) {
         if (!is_array($t) || !preg_match('/^[a-z_]{1,40}$/', (string) ($t['name'] ?? ''))) fail(400, 'bad_request');
@@ -521,11 +546,41 @@ if ($mode === 'agent') {
         . "(6ب) رد بنفس لغة المستخدم: لو كتب بالإنجليزي رد بالإنجليزي، وإلا بالعامية المصرية. "
         . "(7) فرّق بين الحقيقة (من الأدوات) والتفسير المحتمل، وصرّح لما البيانات مش كافية. "
         . "اليوم " . $today . ". المستخدم: " . mb_substr((string) ($json['viewer'] ?? ''), 0, 80) . "\n" . $guide;
-    $messages = contents_to_claude($contents);
-    if (!$messages) fail(400, 'bad_request');
     $lastParts = $contents[count($contents) - 1]['parts'] ?? [];
     $isNewQuestion = true;
     foreach ($lastParts as $lp) if (isset($lp['functionResponse'])) $isNewQuestion = false;
+    if (text_provider($cfg) === 'gemini') {
+        // The conversation is already in Gemini's shape, so it goes as it is.
+        $model = gemini_text_model($cfg);
+        [$status, $gd] = http_json(
+            "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent",
+            ['x-goog-api-key: ' . $cfg['gemini_key']],
+            array_filter([
+                'system_instruction' => ['parts' => [['text' => $system]]],
+                'contents' => $contents,
+                'tools' => $geminiDecls ? [['function_declarations' => $geminiDecls]] : null,
+                'generationConfig' => ['temperature' => 0.2],
+            ], fn($v) => $v !== null)
+        );
+        if ($status === 200) log_usage('agent', $model, $gd, $uid, $isNewQuestion);
+        $content = $gd['candidates'][0]['content'] ?? null;
+        if ($status !== 200 || !is_array($content) || !isset($content['parts'])) fail(502, 'ai_unavailable', $status !== 200 ? gemini_error($status, $gd) : 'empty_reply');
+        $content['parts'] = normalize_parts($content['parts']);
+        $calls = [];
+        $text = '';
+        foreach ($content['parts'] as $part) {
+            if (isset($part['functionCall']['name'])) $calls[] = ['name' => (string) $part['functionCall']['name'], 'args' => as_object($part['functionCall']['args'] ?? [])];
+            elseif (isset($part['text']) && empty($part['thought'])) $text .= $part['text'];
+        }
+        echo json_encode(
+            $calls ? ['type' => 'tool_calls', 'calls' => $calls, 'modelContent' => $content]
+                   : ['type' => 'final', 'text' => trim($text) !== '' ? trim($text) : 'مقدرتش أوصل لإجابة، جرّب تسأل بطريقة تانية.', 'modelContent' => $content],
+            JSON_UNESCAPED_UNICODE
+        );
+        exit;
+    }
+    $messages = contents_to_claude($contents);
+    if (!$messages) fail(400, 'bad_request');
     $data = claude_call($cfg, 'smart', $system, $messages, $tools, 2048, 'agent', $isNewQuestion);
     $parts = [];
     $calls = [];

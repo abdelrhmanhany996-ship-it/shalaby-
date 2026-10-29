@@ -8,10 +8,12 @@
 | تحسين النص، ملخص العميل، تصنيف الشكاوى، اقتراحات المتابعة | Claude | `claude-haiku-5-5` (الأرخص) |
 | تحويل الصوت لنص | Gemini | `gemini-2.5-flash-lite` |
 
+**بديل تلقائي:** لو مفتاح Claude مش موجود ومفتاح Gemini موجود، كل ميزات النص (بما فيها شلبي بالأدوات) تشتغل على Gemini (`gemini-2.5-flash`، يتغيّر بـ `gemini_text_model`). أول ما تضيف `claude_key` يرجع النص لـ Claude تلقائيًا. الـ ping (`GET /api/ai.php`) يرجّع `provider` عشان تعرف مين شغال.
+
 Claude لا يقبل الملفات الصوتية، لذلك الصوت وحده يذهب إلى Gemini. بدون مفتاح Gemini يبقى الميكروفون يعمل بالإملاء المدمج في المتصفح (`ar-EG`)، وباقي ميزات الذكاء الاصطناعي تعمل بمفتاح Claude.
 
 ## الإعداد (مرة واحدة)
-1. مفتاح Claude من https://console.anthropic.com (مطلوب).
+1. مفتاح Claude من https://console.anthropic.com (موصى به؛ بدونه يُستخدم Gemini).
 2. مفتاح Gemini من https://aistudio.google.com/apikey (للصوت فقط، اختياري).
 3. من hPanel ← File Manager أنشئ الملف **خارج** `public_html`:
    `domains/<اسم الموقع>/crm-ai-secrets.php` (بجانب `public_html` وليس داخله)
@@ -23,7 +25,8 @@ Claude لا يقبل الملفات الصوتية، لذلك الصوت وحد�
      // اختياري: لتغيير النماذج
      'claude_model_smart' => 'claude-sonnet-5-5',
      'claude_model_fast'  => 'claude-haiku-5-5',
-     'gemini_model'       => 'gemini-2.5-flash-lite',
+     'gemini_model'       => 'gemini-2.5-flash-lite',  // الصوت
+     'gemini_text_model'  => 'gemini-2.5-flash',       // النص لما مفيش مفتاح Claude
    ];
    ```
 4. لا تضع المفاتيح في الريبو ولا في الكود. كل موقع (test / dev / main) يقرأ ملفه من فولدره.

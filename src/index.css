@@ -2312,13 +2312,6 @@
 .zaki-foot { border-radius: 0 0 22px 22px; }
 @media (max-width: 1023px) { .zaki-panel { height: min(560px, calc(100vh - 150px)); } }
 
-/* Dark mode: a white disc behind the floating Zaki so he stands out from the background */
-:root.dark .zaki-fab .zaki-avatar-art { position: relative; }
-:root.dark .zaki-fab .zaki-avatar-art::before {
-  content: ""; position: absolute; inset: 6% 4% 2%; border-radius: 50%; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.35);
-}
-:root.dark .zaki-fab .zaki-img, :root.dark .zaki-fab .zaki-svg { position: relative; z-index: 1; }
-
 .view-as { display: flex; flex-direction: column; gap: .5rem; }
 .view-as label { display: flex; flex-direction: column; gap: .25rem; font-size: .76rem; font-weight: 700; }
 .view-as select { width: 100%; }
@@ -2332,7 +2325,7 @@
 .review-input { width: 100%; padding: .55rem .75rem; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface-soft); color: inherit; font: inherit; }
 .review-input:focus { outline: none; border-color: #c8232b; box-shadow: 0 0 0 3px rgba(200,35,43,.12); }
 
-/* Zaki's floating button: white disc, then the character, then the red label, then the name on top */
+/* The floating button: the character, then the name on top */
 .zaki-fab-label { position: relative; z-index: 3; margin-top: -20px; }
 
 .interest-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -2611,34 +2604,6 @@
 .btn-secondary .spin { animation: voice-spin 1s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .btn-secondary .spin { animation: none; } }
 
-/* Shalaby, the assistant character */
-.shalaby-character { display: block; width: 100%; height: 100%; overflow: visible; }
-.shalaby-character .sh-lid { transform-box: fill-box; transform-origin: top; transform: scaleY(0); animation: sh-blink 5s infinite; }
-.shalaby-character .sh-head { transform-box: fill-box; transform-origin: 50% 90%; animation: sh-bob 4.5s ease-in-out infinite; }
-.shalaby-character .sh-tassel { animation: sh-tassel 3.2s ease-in-out infinite; }
-.shalaby-character.sh-state-thinking .sh-head { animation: sh-ponder 2.4s ease-in-out infinite; }
-.shalaby-character.sh-state-thinking .sh-tassel { animation-duration: 1.6s; }
-.shalaby-character .sh-talk { transform-box: fill-box; transform-origin: center; animation: sh-talk .32s ease-in-out infinite alternate; }
-.shalaby-character .sh-wave { transform-box: view-box; transform-origin: 150px 210px; animation: sh-wave .55s ease-in-out infinite alternate; }
-.shalaby-character .sh-thought circle { animation: sh-dot 1.2s ease-in-out infinite; }
-.shalaby-character .sh-thought circle:nth-child(2) { animation-delay: .2s; }
-.shalaby-character .sh-thought circle:nth-child(3) { animation-delay: .4s; }
-.shalaby-character .sh-rings path { animation: sh-dot 1.4s ease-in-out infinite; }
-.shalaby-character .sh-rings path:nth-child(2) { animation-delay: .3s; }
-.shalaby-character .sh-zzz text { animation: sh-dot 2.4s ease-in-out infinite; }
-.shalaby-character.sh-state-sleepy .sh-head { animation-duration: 7s; }
-@keyframes sh-blink { 0%, 92%, 100% { transform: scaleY(0); } 95% { transform: scaleY(1); } }
-@keyframes sh-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-@keyframes sh-ponder { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(-6deg) translateY(-1px); } }
-@keyframes sh-tassel { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(9deg); } }
-@keyframes sh-talk { from { transform: scaleY(.35); } to { transform: scaleY(1.15); } }
-@keyframes sh-wave { from { transform: rotate(-6deg); } to { transform: rotate(10deg); } }
-@keyframes sh-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .shalaby-character *, .shalaby-character { animation: none !important; }
-}
-.zaki-avatar-art .shalaby-character { width: 100%; height: 100%; }
-.zaki-head-art .shalaby-character { transform: translateY(6%); }
 .zaki-fab-label.is-ai { letter-spacing: .02em; }
 .zaki-setup { padding: 18px; font-size: 13px; line-height: 1.8; }
 .zaki-setup code { direction: ltr; unicode-bidi: embed; }

@@ -234,19 +234,19 @@ await as("agentA", async (page) => {
   const aside = await page.locator("aside").textContent();
   check(!RETIRED.some((t) => aside.includes(t)), "retired screens are gone from the salesperson's menu");
   // Shalaby AI: the button is always there, and the chat answers from the user's own data through the server
-  const fab = page.getByRole("button", { name: /Shalaby AI/ });
-  check((await fab.count()) === 1 && (await fab.innerText()).includes("Shalaby AI"), "the floating Shalaby AI button is on screen");
+  const fab = page.getByRole("button", { name: /افتح شلبي/ });
+  check((await fab.count()) === 1 && (await fab.innerText()).includes("شلبي"), "the floating شلبي button is on screen");
   await fab.click();
   await page.waitForTimeout(600);
   const panel = page.getByRole("dialog", { name: /شلبي/ });
-  check((await panel.locator(".shalaby-character").count()) > 0, "the character appears inside the chat");
+  check((await panel.locator(".zaki-img").count()) > 0, "the character appears inside the chat");
   await panel.locator("textarea, input").first().fill("مين عنده متابعات متأخرة؟");
   await panel.getByRole("button", { name: "إرسال" }).click();
   await page.waitForTimeout(200);
-  check((await panel.locator(".sh-state-thinking").count()) > 0, "the character thinks while the answer is prepared");
+  check((await panel.locator(".zaki-mood-thinking").count()) > 0, "the character thinks while the answer is prepared");
   await panel.locator(".zaki-msg.bot:not(.zaki-thinking)").last().waitFor({ timeout: 8000 });
   await page.waitForTimeout(300);
-  check((await panel.locator(".sh-state-speaking").count()) > 0, "the character talks while the answer appears");
+  check((await panel.locator(".zaki-mood-talking").count()) > 0, "the character talks while the answer appears");
   await page.waitForTimeout(2500);
   const answer = await panel.innerText();
   check(answer.includes("عميل أحمد الخاص"), "the answer quotes a real follow-up the tool read from the database");
@@ -264,7 +264,7 @@ await as("agentA", async (page) => {
   const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
   check(scrollW <= 392, `no sideways scrolling on a phone (${scrollW}px)`);
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/mobile-home.png` });
-  await page.getByRole("button", { name: /Shalaby AI/ }).click();
+  await page.getByRole("button", { name: /افتح شلبي/ }).click();
   await page.waitForTimeout(800);
   const box = await page.getByRole("dialog", { name: /شلبي/ }).boundingBox();
   check(!!box && box.width <= 390 && box.x >= 0, "the chat fits the phone screen");

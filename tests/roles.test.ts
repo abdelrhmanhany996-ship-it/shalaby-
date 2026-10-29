@@ -16,8 +16,8 @@ test("the developer has every permission regardless of the matrix", () => {
   for (const [p] of permissionDefinitions) assert.ok(hasPermission(developer, p), p);
 });
 
-test("developer-only tools are visible to the developer alone", () => {
-  assert.ok(canAccessPage(developer, "developer"));
+test("the developer section is retired for everyone", () => {
+  assert.ok(!canAccessPage(developer, "developer"));
   assert.ok(!canAccessPage(manager, "developer"));
   assert.ok(!canAccessPage(branchManager, "developer"));
 });

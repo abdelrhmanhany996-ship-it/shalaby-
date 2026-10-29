@@ -280,19 +280,19 @@ export function ZakiChat() {
           <button
             className={`zaki-fab ${mood === "sleepy" ? "is-sleepy" : ""}`}
             onClick={openChat}
-            aria-label="افتح Shalaby AI، المساعد الذكي"
+            aria-label="افتح شلبي، المساعد الذكي"
           >
             <ZakiAvatar mood={mood} size={96} />
-            <span className="zaki-fab-label is-ai">Shalaby AI</span>
+            <span className="zaki-fab-label">شلبي</span>
           </button>
         </div>
       )}
       {open && (
         <div className="zaki-panel" role="dialog" aria-label="شلبي، المساعد الذكي">
           <div className="zaki-head">
-            <ZakiAvatar mood={busy ? "thinking" : speaking ? "talking" : mood} size={150} className="zaki-head-art" />
+            <ZakiAvatar mood={busy ? "thinking" : speaking ? "talking" : mood} size={168} className="zaki-head-art" />
             <div>
-              <strong>Shalaby AI · شلبي</strong>
+              <strong>شلبي</strong>
               <small>
                 <i className="zaki-online" style={available === "on" ? undefined : { background: "var(--wait)" }} />
                 {available === "on" ? (busy ? "بيفكّر…" : speaking ? "بيرد…" : "متاح · بيجاوب من بيانات نظامك") : available === "checking" ? "بيتأكد من الاتصال…" : "محتاج إعداد على السيرفر"}
