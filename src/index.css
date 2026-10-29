@@ -2776,3 +2776,5 @@
   .page-heading > div:not(:first-child) > .btn-secondary { flex: 1 1 140px; justify-content: center; }
   .page-heading > .btn-primary, .page-heading > .tab-filter { align-self: stretch; justify-content: center; }
 }
+/* A single panel on the home page uses the full width instead of leaving half of it empty */
+.home-grid > .panel:only-child { grid-column: 1 / -1; min-height: 0; }
