@@ -5,11 +5,12 @@ name: CI & Deploy
 # test -> https://test-shalaby.engsaber.space    (testing, separate Firebase project shalaby-test)
 # Promotion order: test -> dev -> main. dev deploys only when its code is identical to test; main only when identical to dev.
 # main also waits for approval on the 'production' environment (set required reviewers in GitHub).
+# test-saber -> https://tests-shalaby.engsaber.space (private trial of new features; outside the promotion chain, deploys on every push)
 # Pull requests only run the checks (lint, tests, build); nothing is deployed.
 
 on:
   push:
-    branches: [main, dev, test]
+    branches: [main, dev, test, test-saber]
   pull_request:
     branches: [main, dev, test]
   workflow_dispatch:
@@ -32,7 +33,7 @@ jobs:
       - run: bun run test
       - run: bun run build
         env:
-          VITE_APP_ENV: ${{ github.ref_name == 'test' && 'test' || '' }}
+          VITE_APP_ENV: ${{ (github.ref_name == 'test' || github.ref_name == 'test-saber') && 'test' || '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -42,14 +43,15 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test')
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/test' || github.ref == 'refs/heads/test-saber')
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'test' && 'test' || 'development' }}
+    environment: ${{ github.ref_name == 'main' && 'production' || (github.ref_name == 'test' || github.ref_name == 'test-saber') && 'test' || 'development' }}
     env:
       # Folder of each subdomain on Hostinger, relative to the FTP account root.
       SERVER_DIR_MAIN: domains/engsaber.space/public_html/shalaby-prod-site/
       SERVER_DIR_DEV: domains/engsaber.space/public_html/shalaby-dev-site/
       SERVER_DIR_TEST: domains/engsaber.space/public_html/shalaby-test-site/
+      SERVER_DIR_TESTSABER: domains/engsaber.space/public_html/shalaby-tests-site/
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,7 +76,7 @@ jobs:
         # api/ai.php and api/admin.php carry the project id as a constant. Set the repository variable
         # FIREBASE_PROJECT_TEST / _DEV / _MAIN to the environment's project id; when unset nothing changes.
         env:
-          PROJECT_ID: ${{ github.ref_name == 'main' && vars.FIREBASE_PROJECT_MAIN || github.ref_name == 'test' && vars.FIREBASE_PROJECT_TEST || vars.FIREBASE_PROJECT_DEV }}
+          PROJECT_ID: ${{ github.ref_name == 'main' && vars.FIREBASE_PROJECT_MAIN || (github.ref_name == 'test' || github.ref_name == 'test-saber') && vars.FIREBASE_PROJECT_TEST || vars.FIREBASE_PROJECT_DEV }}
         run: |
           if [ -n "$PROJECT_ID" ]; then
             sed -i "s/const FIREBASE_PROJECT_ID = '[^']*';/const FIREBASE_PROJECT_ID = '$PROJECT_ID';/" dist/api/ai.php dist/api/admin.php
@@ -120,4 +122,4 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           local-dir: ./dist/
-          server-dir: ${{ github.ref_name == 'main' && env.SERVER_DIR_MAIN || github.ref_name == 'test' && env.SERVER_DIR_TEST || env.SERVER_DIR_DEV }}
+          server-dir: ${{ github.ref_name == 'main' && env.SERVER_DIR_MAIN || github.ref_name == 'test' && env.SERVER_DIR_TEST || github.ref_name == 'test-saber' && env.SERVER_DIR_TESTSABER || env.SERVER_DIR_DEV }}
