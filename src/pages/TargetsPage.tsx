@@ -3,7 +3,8 @@ import { ChevronLeft, ChevronRight, Target, Settings2, Check, X } from "lucide-r
 import { useCRM } from "../context/CRMContext";
 import { hasPermission, isSalesCapable } from "../lib/permissions";
 import { formatMoney, today } from "../lib/presentation";
-import { achievedFor, evaluate, monthHistory, monthOf, overview, shiftMonth, targetId, targetStateNames, type Performance, type TargetState } from "../lib/targets";
+import { bucketOf } from "../lib/followUps";
+import { achievedFor, evaluate, monthOf, overview, shiftMonth, targetId, targetStateNames, type Performance, type TargetState } from "../lib/targets";
 
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("ar-EG", { month: "long", year: "numeric", timeZone: "UTC" });
 const stateColor: Record<TargetState, string> = {
@@ -29,7 +30,7 @@ function Bar({ p }: { p: Performance }) {
 const pct = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 1 })}٪`;
 
 export function TargetsPage() {
-  const { effectiveUser, targetUsers: users, bookings, employeeTargets, targetSettings, setEmployeeTarget, removeEmployeeTarget, updateTargetSettings, branches } = useCRM();
+  const { effectiveUser, targetUsers: users, bookings, followUps, employeeTargets, targetSettings, setEmployeeTarget, removeEmployeeTarget, updateTargetSettings, branches } = useCRM();
   const canView = hasPermission(effectiveUser, "targets.view");
   const canManage = hasPermission(effectiveUser, "targets.manage");
   const canConfigure = canManage && ["admin", "general_manager", "regional_manager"].includes(effectiveUser.role);
@@ -40,6 +41,7 @@ export function TargetsPage() {
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const [open, setOpen] = useState("");
   const [showRules, setShowRules] = useState(false);
+  const [showLate, setShowLate] = useState("");
   const [only, setOnly] = useState<"all" | "behind" | "achieved">("all");
 
   const data = useMemo(() => overview(users, employeeTargets, bookings, month, now, targetSettings), [users, employeeTargets, bookings, month, now, targetSettings]);
@@ -280,7 +282,7 @@ export function TargetsPage() {
                     <th>النسبة</th>
                     <th>المتبقي</th>
                     <th>الحالة</th>
-                    <th title="نسبة الإنجاز في الـ 3 شهور اللي فاتت، الأقدم الأول">آخر 3 شهور</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -338,19 +340,99 @@ export function TargetsPage() {
                           <td>
                             <span className={`status-pill ${stateClass[r.state]}`}>{targetStateNames[r.state]}</span>
                           </td>
-                          <td className="table-secondary" style={{ whiteSpace: "nowrap" }}>
-                            {monthHistory(r.user.id, month, 3, employeeTargets, bookings, now, targetSettings)
-                              .map((h) => (h.target ? pct(h.percent) : "—"))
-                              .join(" · ")}
+                          <td>
+                            <button className="btn-secondary" onClick={() => setOpen(open === r.user.id ? "" : r.user.id)} aria-expanded={open === r.user.id} aria-label={`المزيد عن ${r.user.name}`}>
+                              المزيد
+                            </button>
                           </td>
                         </tr>
                         {open === r.user.id && (
                           <tr>
                             <td colSpan={7} style={{ background: "var(--surface-soft)" }}>
                               <div style={{ padding: 8 }}>
-                                <p className="table-secondary">
-                                  {r.purchases ? `${r.purchases} عملية بيع · ${formatMoney(a.amount)} ج.م` : "مفيش مبيعات في الشهر ده"}
+                                <p>
+                                  باع بـ <strong>{formatMoney(a.amount)} ج.م</strong> في {monthLabel(month)} · {r.purchases} فاتورة
                                 </p>
+                                {(() => {
+                                  const sold = bookings
+                                    .filter((b) => b.agentId === r.user.id && monthOf(b.bookingDate) === month)
+                                    .sort((x, y) => y.bookingDate.localeCompare(x.bookingDate));
+                                  return sold.length ? (
+                                    <div className="table-scroll" style={{ margin: "8px 0" }}>
+                                      <table className="data-table">
+                                        <thead>
+                                          <tr>
+                                            <th>التاريخ</th>
+                                            <th>العميل</th>
+                                            <th>الفاتورة</th>
+                                            <th>المبلغ</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {sold.map((b) => {
+                                            const off = b.bookingStatus === "cancelled" || b.paymentStatus === "refunded";
+                                            return (
+                                              <tr key={b.id} style={off ? { opacity: 0.55 } : undefined}>
+                                                <td>{b.bookingDate}</td>
+                                                <td>{b.leadName}</td>
+                                                <td>
+                                                  {b.courseName}
+                                                  {off && <span className="status-pill" style={{ marginInlineStart: 6 }}>{b.bookingStatus === "cancelled" ? "ملغاة" : "مرتجع"}</span>}
+                                                </td>
+                                                <td>{formatMoney(b.amount)} ج.م</td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  ) : (
+                                    <p className="table-secondary">مفيش فواتير في الشهر ده.</p>
+                                  );
+                                })()}
+                                {(() => {
+                                  const late = followUps
+                                    .filter((f) => f.assignedAgentId === r.user.id && bucketOf(f, now) === "overdue")
+                                    .sort((x, y) => x.scheduledAt.localeCompare(y.scheduledAt));
+                                  const daysLate = (d: string) => Math.max(0, Math.round((Date.parse(now) - Date.parse(d.slice(0, 10))) / 86_400_000));
+                                  return (
+                                    <>
+                                      <button className="btn-text" onClick={() => setShowLate(showLate === r.user.id ? "" : r.user.id)} aria-expanded={showLate === r.user.id}>
+                                        التأخير في المتابعات ({late.length})
+                                      </button>
+                                      {showLate === r.user.id &&
+                                        (late.length ? (
+                                          <div className="table-scroll" style={{ margin: "8px 0" }}>
+                                            <table className="data-table">
+                                              <thead>
+                                                <tr>
+                                                  <th>العميل</th>
+                                                  <th>كان المفروض</th>
+                                                  <th>متأخر</th>
+                                                  <th>اتأجلت</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {late.map((f) => (
+                                                  <tr key={f.id}>
+                                                    <td>
+                                                      {f.leadName}
+                                                      <div className="table-secondary">{f.reason}</div>
+                                                    </td>
+                                                    <td>{f.scheduledAt.replace("T", " ").slice(0, 16)}</td>
+                                                    <td style={{ color: "var(--late)" }}>{daysLate(f.scheduledAt)} يوم</td>
+                                                    <td>{f.rescheduleCount ? `${f.rescheduleCount} مرة` : "—"}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        ) : (
+                                          <p className="table-secondary">مفيش متابعات متأخرة. 👌</p>
+                                        ))}
+                                    </>
+                                  );
+                                })()}
                                 {stored && (
                                   <p className="table-secondary">
                                     اتحدد بواسطة {stored.setByName}

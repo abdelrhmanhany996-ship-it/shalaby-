@@ -57,7 +57,7 @@ import { joinSchedule, priorityNames } from "../../lib/followUps";
 import type { FollowUpPriority } from "../../types/crm";
 import { PurchaseOutcomeDialog } from "./PurchaseOutcomeDialog";
 
-export type LeadQuickAction = "edit" | "visit" | "followup" | "outcome";
+export type LeadQuickAction = "edit" | "visit" | "followup" | "outcome" | "booking";
 interface Props {
   lead: Lead | null;
   isOpen: boolean;
@@ -69,7 +69,6 @@ interface Props {
 type Action =
   | Exclude<LeadQuickAction, "outcome">
   | "note"
-  | "booking"
   | "reassign"
   | null;
 export function LeadDetailsModal({

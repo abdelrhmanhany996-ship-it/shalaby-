@@ -202,10 +202,6 @@ export const StaffUsersPage: React.FC = () => {
     isSalesCapable({ role }) &&
     (!editingUser || editingUser.id !== effectiveUser.id || isDirector(effectiveUser));
   const targetFor = (userId: string, month: string) => employeeTargets.find((t) => t.id === targetId(userId, month));
-  const changeTargetMonth = (m: string) => {
-    setTargetMonth(m);
-    if (editingUser) setTargetAmount(String(targetFor(editingUser.id, m)?.amount ?? ""));
-  };
 
   const saveTarget = (userId: string) => {
     if (!canSetTarget || !targetMonth) return;
@@ -847,7 +843,7 @@ export const StaffUsersPage: React.FC = () => {
               {/* Role & Org Position */}
               <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <h4 className="font-bold text-indigo-600 dark:text-indigo-400 text-xs">
-                  2. الدور والفرع
+                  2. الدور
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -872,7 +868,7 @@ export const StaffUsersPage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {["admin", "general_manager", "regional_manager"].includes(role) ? (
+                  {editingUser || branches.length < 2 ? null : ["admin", "general_manager", "regional_manager"].includes(role) ? (
                     <p className="text-xs text-slate-600 dark:text-slate-400 sm:col-span-2 bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
                       الدور ده بيشتغل على كل الفروع، فمش محتاج فرع محدد.
                     </p>
@@ -909,7 +905,7 @@ export const StaffUsersPage: React.FC = () => {
 
               {canSetTarget && (
                 <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <h4 className="font-bold text-indigo-600 dark:text-indigo-400">3. التارجت الشهري</h4>
+                  <h4 className="font-bold text-indigo-600 dark:text-indigo-400">3. تارجت الشهر ده</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">قيمة التارجت (ج.م)</label>
@@ -922,15 +918,6 @@ export const StaffUsersPage: React.FC = () => {
                         value={targetAmount}
                         onChange={(e) => setTargetAmount(e.target.value)}
                         placeholder="مثال: 50000 — اتركها فارغة لو مفيش هدف"
-                        className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1">الشهر</label>
-                      <input
-                        type="month"
-                        value={targetMonth}
-                        onChange={(e) => changeTargetMonth(e.target.value)}
                         className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl"
                       />
                     </div>

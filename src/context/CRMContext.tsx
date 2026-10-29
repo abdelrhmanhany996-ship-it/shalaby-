@@ -868,6 +868,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Lead CRUD
+  const AUTO_FOLLOWUP_DAYS = 2;
   const addLead = (leadData: Omit<Lead, "id" | "createdAt">): Lead => {
     const id = `ld-${crypto.randomUUID()}`;
     const branch = branches.find((b) => b.id === leadData.branchId);
@@ -901,6 +902,22 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
       title: "إضافة العميل للنظام",
       details: `المصدر: ${sourceNames[newLead.source] ?? newLead.source}`,
     });
+
+    // Every new customer gets a first follow-up two days after registration (closed by itself if they buy).
+    if (newLead.assignedAgentId && newLead.status !== "booked") {
+      addFollowUp({
+        leadId: id,
+        leadName: newLead.name,
+        leadPhone: newLead.phone,
+        assignedAgentId: newLead.assignedAgentId,
+        branchId: newLead.branchId,
+        origin: "auto",
+        scheduledAt: addToDate(today(), { days: AUTO_FOLLOWUP_DAYS }),
+        reason: "متابعة أولى بعد التسجيل بيومين",
+        type: "call",
+        notes: "",
+      });
+    }
 
     logAudit(
       "إضافة عميل",
@@ -1445,7 +1462,18 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         : {}),
     });
-    if (post.length) setFollowUps((prev) => [...post, ...prev]);
+    // A purchase answers the open sales follow-ups for this customer: they are closed as "bought".
+    const closedAt = new Date().toISOString();
+    setFollowUps((prev) => [
+      ...post,
+      ...(cancelled
+        ? prev
+        : prev.map((f) =>
+            f.leadId === bookingData.leadId && f.category !== "post_sale" && !["completed", "cancelled"].includes(followUpStatus(f))
+              ? { ...f, status: "completed" as const, outcomeResult: f.outcomeResult || `اشترى · ${bookingData.amount.toLocaleString("en-US")} ج.م`, completedAt: closedAt }
+              : f,
+          )),
+    ]);
 
     addTimelineEvent({
       leadId: bookingData.leadId,

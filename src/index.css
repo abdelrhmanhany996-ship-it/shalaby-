@@ -2635,3 +2635,10 @@
 .statement-totals .metric { padding: 12px 14px; }
 .statement-totals .metric-value { font-size: 18px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Follow-up card: the four outcome buttons, then the small links */
+.followup-four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.followup-four button { min-height: 40px; justify-content: center; white-space: nowrap; }
+@media (max-width: 720px) { .followup-four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.followup-links { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.followup-links select { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font: inherit; font-size: 12px; color: var(--muted); }

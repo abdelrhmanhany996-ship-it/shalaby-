@@ -133,6 +133,12 @@ await as("agentA", async (page, go) => {
   await page.getByRole("button", { name: /حفظ العميل/ }).click();
   await page.waitForTimeout(2500);
   check((await page.locator("main").innerText()).includes("عميل من الفورم"), "agent adds a customer from the form");
+  let auto = [];
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    auto = (await getDocs(collection(ctx.firestore(), "followUps"))).docs.map((d) => d.data()).filter((f) => f.leadName === "عميل من الفورم");
+  });
+  const in2 = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+  check(auto.length === 1 && auto[0].scheduledAt.slice(0, 10) === in2 && auto[0].assignedAgentId === "usr-agentA" && auto[0].origin === "auto", "a new customer gets a follow-up two days after registration");
 });
 
 await as("bm1", async (page, go) => {
@@ -169,17 +175,25 @@ await as("agentA", async (page, go) => {
   await go("متابعاتي");
   const main = page.locator("main");
   check((await main.innerText()).includes("متابعة عرض السعر"), "agent sees the overdue follow-up");
-  await page.locator("article", { hasText: "متابعة عرض السعر" }).getByRole("button", { name: "تأجيل" }).click();
+  const card = page.locator("article", { hasText: "متابعة عرض السعر" });
+  for (const b of ["اشترى", "هتواصل معاه", "اشترى من مكان تاني", "تحديد معاد"]) check((await card.getByRole("button", { name: b, exact: true }).count()) === 1, `the follow-up card has the «${b}» button`);
+  await card.getByRole("button", { name: "تحديد معاد" }).click();
   await page.locator('[role="dialog"] input[type="date"]').fill("2030-02-01");
   await page.locator('[role="dialog"] input[type="time"]').fill("14:30");
   await page.locator('[role="dialog"] textarea').fill("العميل طلب أكلمه بعد الإجازة");
-  await page.getByRole("button", { name: "تأكيد التأجيل" }).click();
+  await page.getByRole("button", { name: "حفظ المعاد" }).click();
   await page.waitForTimeout(2000);
   const f = await readDoc("followUps/F1");
   check(f?.scheduledAt === "2030-02-01T14:30" && f?.rescheduleCount === 1 && f?.rescheduleLog?.[0]?.reason === "العميل طلب أكلمه بعد الإجازة" && f?.rescheduleLog?.[0]?.from === "2026-01-05", "rescheduling saved the new date, the count and the reason");
   await page.locator("article", { hasText: "متابعة عرض السعر" }).locator("select[aria-label='أولوية المتابعة']").selectOption("high");
   await page.waitForTimeout(1500);
   check((await readDoc("followUps/F1"))?.priority === "high", "priority saved");
+  await card.getByRole("button", { name: "اشترى من مكان تاني" }).click();
+  await page.locator('[role="dialog"] textarea').fill("من محل جنبه");
+  await page.getByRole("button", { name: "تأكيد" }).click();
+  await page.waitForTimeout(2000);
+  const done = await readDoc("followUps/F1");
+  check(done?.status === "completed" && done?.outcomeResult?.includes("اشترى من مكان تاني"), "«bought elsewhere» closes the follow-up with the reason");
   await page.getByRole("button", { name: /خطة شلبي اليوم/ }).click();
   await page.waitForTimeout(800);
   check((await main.innerText()).includes("خطة شلبي النهارده"), "the daily plan tab opens and shows a plan built from the user's data");
@@ -199,6 +213,12 @@ await as("bm1", async (page, go) => {
   check((await main.innerText()).includes("3,000") || (await main.innerText()).includes("3000"), "achievement shows the real purchase (3,000)");
   check((await main.innerText()).includes("30"), "percentage shown");
   check(!(await readDoc(`employeeTargets/tgt-usr-bm1-${month}`)), "no target was created for the manager");
+  await page.getByRole("button", { name: "المزيد عن موظف أ" }).click();
+  await page.waitForTimeout(400);
+  const more = await main.innerText();
+  check(more.includes("باع بـ") && more.includes("3,000 ج.م"), "«المزيد» shows how much the employee sold and their invoices");
+  await page.getByRole("button", { name: /التأخير في المتابعات/ }).click();
+  check((await main.innerText()).includes("متأخر") , "«المزيد» shows the employee's follow-up delays");
 });
 
 await as("agentA", async (page, go) => {

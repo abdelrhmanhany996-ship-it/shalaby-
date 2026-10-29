@@ -1,6 +1,6 @@
 import { CustomerBrief } from "../components/common/CustomerBrief";
 import { REFERRAL_MIN_STARS, isReferralPhone } from "../lib/referrals";
-import { canCompleteFollowUp, canManageFollowUp, canAccessPage, isSales, worksOwnCustomers } from "../lib/access";
+import { canCompleteFollowUp, canManageFollowUp, canAccessPage, canEditCustomer, isSales, worksOwnCustomers } from "../lib/access";
 import { hasPermission } from "../lib/permissions";
 import { useState } from "react";
 import {
@@ -14,6 +14,8 @@ import {
   Star,
   Bell,
   CalendarClock,
+  ShoppingBag,
+  Store,
 } from "lucide-react";
 import { useCRM } from "../context/CRMContext";
 import { followUpStatus, phoneNumber, today } from "../lib/presentation";
@@ -38,7 +40,7 @@ interface Props {
   initialTab?: "due" | "overdue";
 }
 export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
-  const { effectiveUser, leads, branches, followUps, updateFollowUpResult, rescheduleFollowUp, updateFollowUpDetails, reviewRequests, addReferralLead, bookings, notBoughtRecords, visits, brokers, reminderDone, markReminderDone, markReviewReminderSent, aiSuggestions } =
+  const { effectiveUser, leads, branches, followUps, updateFollowUpResult, rescheduleFollowUp, updateFollowUpDetails, reviewRequests, addReferralLead, bookings, notBoughtRecords, visits, brokers, reminderDone, markReminderDone, markReviewReminderSent, aiSuggestions, addNotBoughtRecord } =
     useCRM();
   // The one 48-hour nudge for review requests the customer has not answered.
   const tasks = reminderTasks({ visits, reviewRequests, leads, brokers, reminderDone }, effectiveUser.id);
@@ -50,6 +52,8 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
   const [bucket, setBucket] = useState<"open" | "overdue" | "today" | "upcoming" | "completed">("open");
   const [fPriority, setFPriority] = useState<"all" | FollowUpPriority>("all");
   const [moving, setMoving] = useState<FollowUp | null>(null);
+  const [elsewhere, setElsewhere] = useState<FollowUp | null>(null);
+  const [elsewhereNote, setElsewhereNote] = useState("");
   const [moveDate, setMoveDate] = useState("");
   const [moveTime, setMoveTime] = useState("");
   const [moveReason, setMoveReason] = useState("");
@@ -90,6 +94,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
     : 0;
   const ref = useDialog(!!selected, () => setSelected(null));
   const moveRef = useDialog(!!moving, () => setMoving(null));
+  const elsewhereRef = useDialog(!!elsewhere, () => setElsewhere(null));
   const complete = (e: React.FormEvent) => {
     e.preventDefault();
     if (
@@ -149,9 +154,12 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
   };
   const openMove = (f: FollowUp) => {
     setMoving(f);
-    setMoveDate(f.scheduledAt.slice(0, 10));
+    const base = f.scheduledAt.slice(0, 10) > today() ? f.scheduledAt.slice(0, 10) : today();
+    const next = new Date(`${base}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    setMoveDate(next.toISOString().slice(0, 10));
     setMoveTime(timeOfDay(f) ?? "");
-    setMoveReason("");
+    setMoveReason("تواصل تاني مع العميل");
     setMoveError("");
   };
   const submitMove = (e: React.FormEvent) => {
@@ -160,7 +168,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
     try {
       rescheduleFollowUp(moving.id, joinSchedule(moveDate, moveTime), moveReason);
       setMoving(null);
-      flash("اتأجلت المتابعة واتسجّل السبب.");
+      flash("اتحدد معاد المتابعة الجديد.");
     } catch (err) {
       setMoveError(err instanceof Error ? err.message : "تعذر التأجيل.");
     }
@@ -169,6 +177,42 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
   const flash = (text: string) => {
     setToast(text);
     window.setTimeout(() => setToast(""), 5000);
+  };
+
+  const leadOf = (f: FollowUp) => leads.find((l) => l.id === f.leadId);
+  const canBook = (f: FollowUp) => !!f.leadId && !!leadOf(f) && hasPermission(effectiveUser, "bookings.create") && (!isSales(effectiveUser) || leadOf(f)!.assignedAgentId === effectiveUser.id);
+  const canEditLead = (f: FollowUp) => !!leadOf(f) && canEditCustomer(effectiveUser, leadOf(f)!);
+  const canContact = (f: FollowUp) => f.assignedAgentId === effectiveUser.id && hasPermission(effectiveUser, "customers.contact");
+  const openResult = (f: FollowUp) => {
+    setSelected(f);
+    setRating(0);
+    setRatingComment("");
+    setReferralNote("");
+    setResult("");
+    setHasNext(false);
+    setNextDate("");
+  };
+  const submitElsewhere = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!elsewhere) return;
+    const lead = leadOf(elsewhere);
+    const note = elsewhereNote.trim();
+    try {
+      if (lead)
+        addNotBoughtRecord({
+          leadId: lead.id,
+          leadName: lead.name,
+          branchId: lead.branchId,
+          agentId: elsewhere.assignedAgentId,
+          reasons: ["competitor"],
+          ...(note ? { note } : {}),
+        });
+      updateFollowUpResult(elsewhere.id, "completed", `اشترى من مكان تاني${note ? `: ${note}` : ""}`);
+      setElsewhere(null);
+      flash("اتسجّل إن العميل اشترى من مكان تاني، واتقفلت المتابعة.");
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "تعذر الحفظ.");
+    }
   };
 
   const card = (f: FollowUp, section: "overdue" | "due" | "upcoming" | "done") => (
@@ -214,33 +258,60 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
         </p>
       )}
       {f.referralNote && <p>ترشيحات: {f.referralNote}</p>}
-      <div className="followup-actions">
-        {canCompleteFollowUp(effectiveUser, f) && section !== "done" && (
-          <button
-            className="btn-primary"
-            onClick={() => {
-              setSelected(f);
-              setRating(0);
-              setRatingComment("");
-              setReferralNote("");
-              setResult("");
-              setHasNext(false);
-              setNextDate("");
-            }}
-          >
-            <Check size={15} />
-            تسجيل النتيجة
-          </button>
-        )}
-        {section !== "done" && canManageFollowUp(effectiveUser, f) && (
-          <button className="btn-secondary" onClick={() => openMove(f)}>
-            <CalendarClock size={14} />
-            تأجيل
-          </button>
-        )}
+      {section !== "done" && !isPostSale(f) ? (
+        <div className="followup-four">
+          {canBook(f) && (
+            <button className="btn-secondary btn-buy" onClick={() => onOpenLead(f.leadId, "booking")}>
+              <ShoppingBag size={15} />
+              اشترى
+            </button>
+          )}
+          {canCompleteFollowUp(effectiveUser, f) && (
+            <button className="btn-primary" onClick={() => openResult(f)}>
+              <Phone size={15} />
+              هتواصل معاه
+            </button>
+          )}
+          {canCompleteFollowUp(effectiveUser, f) && canEditLead(f) && (
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setElsewhere(f);
+                setElsewhereNote("");
+              }}
+            >
+              <Store size={15} />
+              اشترى من مكان تاني
+            </button>
+          )}
+          {canManageFollowUp(effectiveUser, f) && (
+            <button className="btn-secondary" onClick={() => openMove(f)}>
+              <CalendarClock size={15} />
+              تحديد معاد
+            </button>
+          )}
+        </div>
+      ) : (
+        section !== "done" && (
+          <div className="followup-actions">
+            {canCompleteFollowUp(effectiveUser, f) && (
+              <button className="btn-primary" onClick={() => openResult(f)}>
+                <Check size={15} />
+                تسجيل النتيجة
+              </button>
+            )}
+            {canManageFollowUp(effectiveUser, f) && (
+              <button className="btn-secondary" onClick={() => openMove(f)}>
+                <CalendarClock size={14} />
+                تحديد معاد
+              </button>
+            )}
+          </div>
+        )
+      )}
+      <div className="followup-links">
         {section !== "done" && canManageFollowUp(effectiveUser, f) && (
           <select
-            className="btn-secondary"
             aria-label="أولوية المتابعة"
             value={priorityOf(f)}
             onChange={(e) => updateFollowUpDetails(f.id, { priority: e.target.value as FollowUpPriority })}
@@ -258,29 +329,13 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
             <span className="last-bought" title={last.what}>
               آخر مرة اشترى: <bdi>{last.date}</bdi> · <bdi>{last.amount.toLocaleString("en-US")}</bdi> ج.م
             </span>
-          ) : (
-            <button className="btn-secondary" onClick={() => onOpenLead(f.leadId, "outcome")}>
-              اشترى ولا لسه؟
-            </button>
-          );
+          ) : null;
         })()}
         {canAccessPage(effectiveUser, "clients") && f.leadId && (
-          <button className="btn-secondary" onClick={() => onOpenLead(f.leadId)}>
+          <button className="btn-text" onClick={() => onOpenLead(f.leadId)}>
             ملف العميل
             <ArrowUpLeft size={14} />
           </button>
-        )}
-        {f.assignedAgentId === effectiveUser.id && hasPermission(effectiveUser, "customers.contact") && (
-          <a className="btn-secondary" href={`tel:${phoneNumber(f.leadPhone)}`}>
-            <Phone size={14} />
-            اتصال
-          </a>
-        )}
-        {f.assignedAgentId === effectiveUser.id && hasPermission(effectiveUser, "customers.contact") && (
-          <a className="btn-secondary" href={`https://wa.me/${phoneNumber(leads.find((l) => l.id === f.leadId)?.whatsappPhone || f.leadPhone)}`} target="_blank" rel="noreferrer">
-            <MessageCircle size={14} />
-            واتساب
-          </a>
         )}
       </div>
     </article>
@@ -540,13 +595,41 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
           )}
         </section>
       )}
+      {elsewhere && (
+        <div className="dialog-backdrop">
+          <div className="panel" ref={elsewhereRef} role="dialog" aria-modal="true" aria-labelledby="followup-elsewhere-title" style={{ width: "min(430px,100%)", padding: 27 }}>
+            <div className="page-heading">
+              <div>
+                <h2 id="followup-elsewhere-title" style={{ fontSize: 20, fontWeight: 600 }}>
+                  اشترى من مكان تاني
+                </h2>
+                <p>{elsewhere.leadName} · المتابعة هتتقفل وهيتسجّل السبب في ملف العميل.</p>
+              </div>
+              <button className="icon-button" onClick={() => setElsewhere(null)} aria-label="إغلاق">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={submitElsewhere}>
+              <label className="field">
+                <span>
+                  اشترى منين وليه؟ <em className="optional-tag">اختياري</em>
+                </span>
+                <textarea rows={2} value={elsewhereNote} onChange={(e) => setElsewhereNote(e.target.value)} placeholder="مثلاً: من محل قريب منه بسعر أقل." />
+              </label>
+              <button className="btn-primary" type="submit" style={{ marginTop: 18 }}>
+                تأكيد
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
       {moving && (
         <div className="dialog-backdrop">
           <div className="panel" ref={moveRef} role="dialog" aria-modal="true" aria-labelledby="followup-move-title" style={{ width: "min(430px,100%)", padding: 27 }}>
             <div className="page-heading">
               <div>
                 <h2 id="followup-move-title" style={{ fontSize: 20, fontWeight: 600 }}>
-                  تأجيل المتابعة
+                  معاد متابعة جديد
                 </h2>
                 <p>
                   {moving.leadName} · الموعد الحالي {moving.scheduledAt.replace("T", " ")}
@@ -573,7 +656,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
               </div>
               <label className="field">
                 <span>
-                  سبب التأجيل <em>مطلوب</em>
+                  هتكلمه في إيه؟ <em>مطلوب</em>
                 </span>
                 <textarea rows={2} required value={moveReason} onChange={(e) => setMoveReason(e.target.value)} placeholder="مثلاً: العميل طلب نكلمه الأسبوع الجاي." />
               </label>
@@ -583,7 +666,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
                 </p>
               )}
               <button className="btn-primary" type="submit" style={{ marginTop: 18 }}>
-                تأكيد التأجيل
+                حفظ المعاد
               </button>
             </form>
           </div>
@@ -618,6 +701,18 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
               </button>
             </div>
             <form onSubmit={complete}>
+              {canContact(selected) && (
+                <div className="followup-actions" style={{ marginTop: 0, marginBottom: 12 }}>
+                  <a className="btn-secondary" href={`tel:${phoneNumber(selected.leadPhone)}`}>
+                    <Phone size={14} />
+                    اتصال
+                  </a>
+                  <a className="btn-secondary" href={`https://wa.me/${phoneNumber(leadOf(selected)?.whatsappPhone || selected.leadPhone)}`} target="_blank" rel="noreferrer">
+                    <MessageCircle size={14} />
+                    واتساب
+                  </a>
+                </div>
+              )}
               {(() => {
                 const l = leads.find((x) => x.id === selected.leadId);
                 return l ? <CustomerBrief lead={l} compact /> : null;
