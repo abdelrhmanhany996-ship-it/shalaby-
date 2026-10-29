@@ -101,7 +101,7 @@ function http_json(string $url, array $headers, array $body): array {
     return [$status, is_array($data) ? $data : []];
 }
 
-const FIREBASE_PROJECT_ID = 'shalaby-group';
+const FIREBASE_PROJECT_ID = 'shalaby-crm-eg';
 
 /**
  * Returns the uid only when the caller is an ACTIVE staff member. The user's own

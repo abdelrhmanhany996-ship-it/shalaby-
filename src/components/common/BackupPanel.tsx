@@ -3,7 +3,7 @@ import { DatabaseBackup, Copy } from "lucide-react";
 import { useCRM } from "../../context/CRMContext";
 import { adminStatus, backupStatus, listBackups, startBackup } from "../../lib/adminClient";
 
-const PROJECT = "shalaby-group";
+const PROJECT = "shalaby-crm-eg";
 const pointTime = (p: string) => {
   const m = p.match(/^manual-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})$/);
   return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])).toLocaleString("ar-EG") : p;

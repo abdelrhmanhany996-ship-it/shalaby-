@@ -1,9 +1,9 @@
 {
-  "projectId": "shalaby-group",
-  "appId": "REPLACE_WITH_FIREBASE_APP_ID",
-  "apiKey": "REPLACE_WITH_FIREBASE_API_KEY",
-  "authDomain": "shalaby-group.firebaseapp.com",
+  "projectId": "shalaby-crm-eg",
+  "appId": "1:1077056074670:web:539c6122cd0f4b35d70e3f",
+  "apiKey": "AIzaSyD933c0mg1u7f9ZWIvEC0xwdO_TOTQRbCI",
+  "authDomain": "shalaby-crm-eg.firebaseapp.com",
   "firestoreDatabaseId": "(default)",
-  "storageBucket": "shalaby-group.firebasestorage.app",
-  "messagingSenderId": "REPLACE_WITH_SENDER_ID"
+  "storageBucket": "shalaby-crm-eg.firebasestorage.app",
+  "messagingSenderId": "1077056074670"
 }

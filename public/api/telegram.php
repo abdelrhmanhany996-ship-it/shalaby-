@@ -25,7 +25,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
-const FIREBASE_PROJECT_ID = 'shalaby-group';
+const FIREBASE_PROJECT_ID = 'shalaby-crm-eg';
 const MAX_TEXT = 3500;
 const PAGE = 300;
 
