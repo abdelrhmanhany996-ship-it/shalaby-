@@ -79,6 +79,39 @@ jobs:
           if [ -n "$PROJECT_ID" ]; then
             sed -i "s/const FIREBASE_PROJECT_ID = '[^']*';/const FIREBASE_PROJECT_ID = '$PROJECT_ID';/" dist/api/ai.php dist/api/admin.php
           fi
+      - name: Write AI keys from GitHub Secrets
+        # api/ai.php reads crm-ai-secrets.php from a folder OUTSIDE the web root. The file is generated here from the
+        # repository secrets ANTHROPIC_API_KEY (Claude) and optionally GEMINI_API_KEY (voice notes only), so the keys
+        # never live in the repo. When ANTHROPIC_API_KEY is unset nothing is uploaded and any file already on the server is kept.
+        id: aikeys
+        env:
+          CLAUDE_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$CLAUDE_KEY" ]; then
+            echo "ANTHROPIC_API_KEY is not set; leaving the server's crm-ai-secrets.php untouched."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p ai-secrets
+          php -r '
+            $cfg = ["claude_key" => getenv("CLAUDE_KEY")];
+            if (getenv("GEMINI_KEY") !== "" && getenv("GEMINI_KEY") !== false) $cfg["gemini_key"] = getenv("GEMINI_KEY");
+            file_put_contents("ai-secrets/crm-ai-secrets.php", "<?php\nreturn " . var_export($cfg, true) . ";\n");
+          '
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+      - name: Upload AI keys (outside the web root)
+        if: steps.aikeys.outputs.enabled == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: ./ai-secrets/
+          # api/ai.php finds the file three levels above its own folder: domains/engsaber.space/, next to public_html.
+          server-dir: domains/engsaber.space/
+          state-name: .ftp-deploy-sync-state-ai-secrets.json
       - name: Deploy over FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:

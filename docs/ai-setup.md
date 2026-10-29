@@ -31,6 +31,13 @@ Claude لا يقبل الملفات الصوتية، لذلك الصوت وحد�
    ```
 4. لا تضع المفاتيح في الريبو ولا في الكود. كل موقع (test / dev / main) يقرأ ملفه من فولدره.
 
+### الطريقة الأسهل: من GitHub Secrets
+بدل ما تنشئ الملف يدويًا، ضيف في الريبو: Settings ← Secrets and variables ← Actions ← New repository secret:
+- `ANTHROPIC_API_KEY` = مفتاح Claude (مطلوب).
+- `GEMINI_API_KEY` = مفتاح Gemini (اختياري، للصوت فقط).
+
+عند كل ديبلوي، الـ workflow (`.github/workflows/deploy.yml`) بيولّد `crm-ai-secrets.php` ويرفعه في `domains/engsaber.space/` (برا `public_html`)، فيتشارك بين test/dev/main. لو `ANTHROPIC_API_KEY` مش موجود، الملف اللي على السيرفر بيفضل زي ما هو.
+
 ## التحديث التلقائي
 لا يوجد جدول مهام (cron) على السيرفر لهذا النظام. «خطة اليوم» وتوصيات شلبي تُحدَّث عند فتح التطبيق أو الضغط على «تحديث»، وتُعاد تلقائيًا أثناء فتح التطبيق إذا تغيّرت البيانات.
 
