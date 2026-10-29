@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { 
   User, Team, AiTool, Subscription, ActivityLog, 
   NotificationItem, NavTab, Language, ToastMessage, Role, SubscriptionStatus,
@@ -194,13 +195,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Active Navigation
   // Keep the open page across refreshes too
-  const [activeTab, setActiveTab] = useState<NavTab>(() => {
+  const [activeTab, setActiveTabRaw] = useState<NavTab>(() => {
     try {
       return (localStorage.getItem('ai_res_active_tab') as NavTab) || 'dashboard';
     } catch {
       return 'dashboard';
     }
   });
+  // Pages cross-fade and slide through the View Transitions API where the browser has it, otherwise the CSS entrance plays
+  const setActiveTab = (tab: NavTab) => {
+    if (tab === activeTab) return;
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (doc.startViewTransition && !calm) {
+      document.documentElement.classList.add('vt-on');
+      const vt = doc.startViewTransition(() => { flushSync(() => setActiveTabRaw(tab)); }) as { finished?: Promise<unknown> };
+      vt.finished?.finally(() => document.documentElement.classList.remove('vt-on'));
+    } else {
+      setActiveTabRaw(tab);
+    }
+  };
   useEffect(() => {
     try {
       localStorage.setItem('ai_res_active_tab', activeTab);
@@ -1230,3 +1244,4 @@ export const useApp = () => {
   }
   return context;
 };
+

@@ -1,6 +1,9 @@
-import {createRoot} from 'react-dom/client';
+﻿import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { installModalMotion } from './utils/modalMotion';
+
+installModalMotion();
 
 // Suppress preview environment WebSocket HMR connection warnings/rejections
 if (typeof window !== 'undefined') {
@@ -18,3 +21,4 @@ if (typeof window !== 'undefined') {
 }
 
 createRoot(document.getElementById('root')!).render(<App />);
+
