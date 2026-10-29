@@ -1,0 +1,237 @@
+﻿@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* One shape language for the whole app: soft, generously rounded corners (20-30px on cards) */
+@theme {
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 1.75rem;
+
+  /* The accent is golden yellow everywhere (buttons, active items, charts) instead of a mix of indigo and blue */
+  --color-indigo-50: #fffbeb;
+  --color-indigo-100: #fef3c7;
+  --color-indigo-200: #fde68a;
+  --color-indigo-300: #fcd34d;
+  --color-indigo-400: #fbbf24;
+  --color-indigo-500: #f59e0b;
+  --color-indigo-600: #d97706;
+  --color-indigo-700: #b45309;
+  --color-indigo-800: #92400e;
+  --color-indigo-900: #78350f;
+  --color-indigo-950: #451a03;
+  /* Light mode greys become warm cream-yellow */
+  --color-slate-50: #fffbea;
+  --color-slate-100: #fef3c7;
+  --color-slate-200: #fde9a0;
+  --color-slate-300: #f9d871;
+}
+
+@layer base {
+  :root {
+    --font-sans: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    /* Figures use the same clean geometric face as the headings, with equal-width digits */
+    --font-mono: 'Plus Jakarta Sans', 'Cairo', system-ui, -apple-system, sans-serif;
+  }
+
+  html[dir="ltr"] {
+    font-family: 'Plus Jakarta Sans', 'Cairo', system-ui, -apple-system, sans-serif;
+  }
+
+  html[dir="rtl"] {
+    font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    background-color: #fffbeb;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Dark mode: black palette (page #000, cards #121212) with white text */
+.dark {
+  --color-slate-950: #000000;
+  --color-slate-900: #121212;
+  --color-slate-800: #1e1e1e;
+  --color-slate-700: #2c2c2c;
+
+  /* Text tones: pure white for titles (text-white), soft white for body and muted text instead of blue-grey */
+  --color-slate-200: #f7f7f7;
+  --color-slate-300: #e6e6e6;
+  --color-slate-400: #b8b8b8;
+  --color-slate-500: #8f8f8f;
+}
+
+body { transition: background-color .3s ease, color .3s ease; }
+
+/* Every figure lines up in columns; real codes (licenses, Google codes) keep a true monospace face */
+.font-mono { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+code.font-mono, code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+
+/* Same title style on every page */
+main h1 {
+  font-size: clamp(1.65rem, 5vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+/* Never let the page itself slide sideways on a phone; wide tables scroll inside their own box */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Recharts draws a focus outline (a white frame) around a chart after it is clicked */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface:focus {
+  outline: none;
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(22px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(54px) rotate(-4deg) scale(0.94); }
+  60%  { opacity: 1; }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(46px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.6); }
+  70%  { transform: scale(1.08); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(14px, -16px) scale(1.06); }
+}
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes fade-in-slow {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ring-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.55); }
+  100% { box-shadow: 0 0 0 18px rgba(59, 130, 246, 0); }
+}
+@keyframes sheen {
+  0%   { transform: translateX(-120%) skewX(-18deg); }
+  100% { transform: translateX(260%) skewX(-18deg); }
+}
+
+/* Each page: its sections slide up one after another */
+.page-enter > div > * { animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.page-enter > div > *:nth-child(1) { animation-delay: 0.02s; }
+.page-enter > div > *:nth-child(2) { animation-delay: 0.08s; }
+.page-enter > div > *:nth-child(3) { animation-delay: 0.14s; }
+.page-enter > div > *:nth-child(4) { animation-delay: 0.20s; }
+.page-enter > div > *:nth-child(5) { animation-delay: 0.26s; }
+.page-enter > div > *:nth-child(6) { animation-delay: 0.32s; }
+.page-enter > div > *:nth-child(n+7) { animation-delay: 0.38s; }
+
+.anim-card-in  { animation: card-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards; }
+.anim-panel-in { animation: panel-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.45s backwards; }
+.anim-pop      { animation: pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+.anim-float    { animation: float 4.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.anim-drift    { animation: drift 9s ease-in-out infinite; }
+.anim-draw     { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.3s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards; }
+.anim-fade     { animation: fade-in-slow 1s ease 0.9s backwards; }
+.anim-ring     { animation: ring-pulse 1.8s ease-out 1.2s 2; }
+
+/* A soft light sweeping across the wallet card, like glass catching light */
+.sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: sheen 5.5s ease-in-out 1.4s infinite;
+  pointer-events: none;
+}
+
+/* Smooth, consistent press and hover feedback on buttons */
+button:not(:disabled) { transition-property: transform, background-color, color, border-color, box-shadow, opacity; transition-duration: 0.2s; transition-timing-function: ease; }
+button:not(:disabled):active { transform: scale(0.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter > div > *,
+  .anim-card-in, .anim-panel-in, .anim-pop, .anim-float, .anim-drift, .anim-fade, .anim-ring, .sheen::after {
+    animation: none !important;
+  }
+  .anim-draw { animation: none; stroke-dashoffset: 0; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Number alignment */
+.numeric-tabular {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+
+/* Yellow accent motion: primary buttons glide a light sweep, active nav pulses softly */
+@keyframes btn-sweep { 0% { transform: translateX(-130%) skewX(-18deg); } 60%, 100% { transform: translateX(230%) skewX(-18deg); } }
+@keyframes glow-breathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,.0); } 50% { box-shadow: 0 0 22px 2px rgba(245,158,11,.35); } }
+button.bg-indigo-600, button.bg-amber-500 { position: relative; overflow: hidden; }
+button.bg-indigo-600::after, button.bg-amber-500::after {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  animation: btn-sweep 4.5s ease-in-out infinite; pointer-events: none;
+}
+button.bg-indigo-600 { animation: glow-breathe 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  button.bg-indigo-600, button.bg-indigo-600::after, button.bg-amber-500::after { animation: none; }
+}
+
+
+
+/* Navigation motion: items slide in one after another, icons lift on hover and pop when a page becomes active */
+@keyframes nav-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes ico-pop { 0% { transform: scale(.6) rotate(-14deg); } 55% { transform: scale(1.3) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+@keyframes mark-glow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(251,191,36,0)); } 50% { filter: drop-shadow(0 0 10px rgba(251,191,36,.7)); } }
+.nav-item { animation: nav-in .5s cubic-bezier(.22,1,.36,1) both; }
+.nav-ico { display: inline-flex; transition: transform .25s cubic-bezier(.34,1.56,.64,1); }
+.nav-item:hover .nav-ico, .nav-tab:hover .nav-ico { transform: translateY(-2px) scale(1.18) rotate(-6deg); }
+.nav-ico-active { display: inline-flex; animation: ico-pop .55s cubic-bezier(.34,1.56,.64,1) both; }
+.brand-mark { animation: mark-glow 3.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .nav-item, .nav-ico-active, .brand-mark { animation: none; } }
+
+/* Overscroll / status-bar area behind the app follows the theme instead of flashing cream */
+html.dark { background-color: #000; }
+html:not(.dark) { background-color: #fffbeb; }
+
+html.dark body { background-color: #000; }

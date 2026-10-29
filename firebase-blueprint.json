@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "Subscription": {
+      "title": "Subscription",
+      "description": "AI tool subscription record in the platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "toolId": { "type": "string" },
+        "toolName": { "type": "string" },
+        "provider": { "type": "string" },
+        "planName": { "type": "string" },
+        "planType": { "type": "string" },
+        "cost": { "type": "number" },
+        "currency": { "type": "string" },
+        "billingCycle": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "assignedUserIds": { "type": "array" },
+        "startDate": { "type": "string" },
+        "renewalDate": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "paymentUrl": { "type": "string" },
+        "autoRenewal": { "type": "boolean" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "toolName", "cost", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "System user account profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Department or team group",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "memberCount": { "type": "number" },
+        "toolCount": { "type": "number" },
+        "monthlyCost": { "type": "number" },
+        "monthlyBudget": { "type": "number" },
+        "color": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "AiTool": {
+      "title": "AiTool",
+      "description": "Cataloged AI Software tool",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "provider": { "type": "string" },
+        "category": { "type": "string" },
+        "logo": { "type": "string" },
+        "badgeColor": { "type": "string" },
+        "description": { "type": "string" },
+        "subscriptionsCount": { "type": "number" },
+        "usersCount": { "type": "number" },
+        "monthlySpending": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "System or renewal notification message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "subscriptionId": { "type": "string" }
+      },
+      "required": ["id", "title", "message"]
+    }
+  },
+  "firestore": {
+    "/subscriptions/{subscriptionId}": {
+      "schema": "Subscription",
+      "description": "Collection of all AI tool subscriptions"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of all system users"
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Collection of company teams and departments"
+    },
+    "/aiTools/{toolId}": {
+      "schema": "AiTool",
+      "description": "Collection of AI tools catalog"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "NotificationItem",
+      "description": "Collection of system notifications"
+    }
+  }
+}
