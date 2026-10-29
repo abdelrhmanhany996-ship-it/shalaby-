@@ -189,7 +189,7 @@ export function VisitsPage({ onOpenLead }: Props) {
         const leadId = visit.linkedLeadId;
         const branchName = branches.find((b) => b.id === branchId)?.name;
         if (bought && hasPermission(effectiveUser, "bookings.create")) {
-          const purchase = purchaseFromItems(outcome.items);
+          const purchase = purchaseFromItems(outcome.items, outcome.lines);
           addBooking({
             leadId,
             leadName: clientName,

@@ -212,7 +212,7 @@ export const canEditStaff = (actor: User, target: User, branches: Branch[]) =>
  */
 export const retiredPages = new Set([
   "visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports",
-  "accounts", "branches", "dept_dashboard", "teams", "analytics_dashboard", "developer", "permissions",
+  "accounts", "branches", "dept_dashboard", "teams", "analytics_dashboard", "developer", "permissions", "sales_statements",
 ]);
 
 export function canAccessPage(u: User, page: string) {

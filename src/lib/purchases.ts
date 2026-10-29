@@ -1,4 +1,5 @@
-import type { Booking, Department, NotBoughtRecord } from "../types/crm";
+import { cleanLines, productsLabel } from "./purchaseLines";
+import type { PurchaseLine, Booking, Department, NotBoughtRecord } from "../types/crm";
 
 /** The four main departments a purchase is split across. */
 export const departmentIds: Department[] = [
@@ -50,9 +51,10 @@ const categoryDepartment: Record<string, Department> = {
 };
 
 /** The booking fields for what a customer bought, from the amounts picked per category. */
-export function purchaseFromItems(items: { categoryId: string; categoryName: string; amount: number }[]) {
+export function purchaseFromItems(items: { categoryId: string; categoryName: string; amount: number }[], lines?: PurchaseLine[]) {
   const amounts: Partial<Record<Department, number>> = {};
   const names: string[] = [];
+  const kept = cleanLines(lines ?? []);
   for (const i of items) {
     const dept = categoryDepartment[i.categoryId] ?? (departmentIds.includes(i.categoryId as Department) ? (i.categoryId as Department) : "general");
     const amount = Number(i.amount);
@@ -67,7 +69,9 @@ export function purchaseFromItems(items: { categoryId: string; categoryName: str
     departmentAmounts: amounts,
     amount: entries.reduce((s, [, v]) => s + v, 0),
     courseId: entries.length === 1 ? `ps-${primary}` : "ps-multi",
-    courseName: [...new Set(names)].join(" + "),
+    // With typed items the purchase is named after the products; otherwise after the category as before.
+    courseName: kept.length ? productsLabel(kept) : [...new Set(names)].join(" + "),
+    ...(kept.length ? { lines: kept } : {}),
   };
 }
 

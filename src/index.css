@@ -2675,3 +2675,13 @@
 .tg-note { margin: 0; padding: 0 14px 10px; font-size: 11px; color: var(--muted); background: var(--surface); }
 @media (max-width: 720px) { .tg-chat { height: calc(100dvh - 190px); } .tg-bubble { max-width: 88%; } }
 .tg-chat-open .zaki-fab-wrap { display: none; }
+
+/* Purchase details: items typed by hand, with the overall total last */
+.purchase-details { margin-top: 14px; display: grid; gap: 8px; }
+.purchase-line { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto; gap: 8px; align-items: center; }
+.purchase-line input { min-width: 0; }
+.purchase-line input[readonly] { background: var(--surface-soft); }
+.purchase-details > .btn-secondary { justify-self: start; }
+.purchase-total { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 12px; background: var(--buy-soft); color: var(--buy-ink); font-size: 15px; }
+.purchase-total strong { font-size: 18px; }
+@media (max-width: 720px) { .purchase-line { grid-template-columns: 1fr 1fr; } .purchase-line input:first-child { grid-column: 1 / -1; } .purchase-line .icon-button { justify-self: end; } }

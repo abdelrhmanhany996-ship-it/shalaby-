@@ -32,6 +32,7 @@ import { useCRM } from "../context/CRMContext";
 import {
   departmentNames,
   sourceNames,
+  selectableSources,
   canSeeBranch,
   isManagement,
   phoneNumber,
@@ -78,7 +79,7 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
   // Business categories were taken out of the CRM: every new customer is filed under "general".
   const [interests] = useState<Department[]>(["general"]);
   const department = interests[0];
-  const [source, setSource] = useState<LeadSource>("walk_in");
+  const [source, setSource] = useState<LeadSource>("phone_inquiry");
   const [sameWhatsapp, setSameWhatsapp] = useState(true);
   const [whatsapp, setWhatsapp] = useState("");
   const [notes, setNotes] = useState("");
@@ -182,7 +183,7 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
       notes: notes.trim(),
     });
     if (outcome.result === "bought" && hasPermission(effectiveUser, "bookings.create")) {
-      const purchase = purchaseFromItems(outcome.items);
+      const purchase = purchaseFromItems(outcome.items, outcome.lines);
       addBooking({
         leadId: lead.id,
         leadName: lead.name,
@@ -326,7 +327,7 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
                 value={source}
                 onChange={(e) => setSource(e.target.value as LeadSource)}
               >
-                {Object.entries(sourceNames).map(([id, label]) => (
+                {selectableSources.map((id) => [id, sourceNames[id]] as const).map(([id, label]) => (
                   <option key={id} value={id}>
                     {label}
                   </option>
@@ -420,7 +421,7 @@ export function AddLeadPage({ onSuccessNavigate, onOpenExistingLead }: Props) {
                 </span>
                 <textarea
                   rows={3}
-                  placeholder="تفاصيل تساعد زميلك يكمل من مكانك…"
+                  placeholder="تفاصيل تساعدك تفتكر العميل وتساعد شلبي يحلله: احتياجه، ميزانيته، شخصيته، أي حاجة قالها…"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                 />

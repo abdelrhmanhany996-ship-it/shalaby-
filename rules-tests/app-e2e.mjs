@@ -6,7 +6,6 @@ import { extname, join } from "node:path";
 import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { chromium } from "playwright-core";
-import { makeXlsx } from "./xlsx-fixture.mjs";
 
 const DIST = process.env.APP_DIST;
 const PROJECT = "shalaby-crm-eg";
@@ -203,7 +202,7 @@ await as("agentA", async (page, go) => {
   const main = page.locator("main");
   check((await main.innerText()).includes("متابعة عرض السعر"), "agent sees the overdue follow-up");
   const card = page.locator("article", { hasText: "متابعة عرض السعر" });
-  for (const b of ["اشترى", "هتواصل معاه", "اشترى من مكان تاني", "تحديد معاد"]) check((await card.getByRole("button", { name: b, exact: true }).count()) === 1, `the follow-up card has the «${b}» button`);
+  for (const b of ["اشترى مننا", "اشترى من مكان تاني", "تحديد معاد"]) check((await card.getByRole("button", { name: b, exact: true }).count()) === 1, `the follow-up card has the «${b}» button`);
   await card.getByRole("button", { name: "تحديد معاد" }).click();
   await page.locator('[role="dialog"] input[type="date"]').fill("2030-02-01");
   await page.locator('[role="dialog"] input[type="time"]').fill("14:30");
@@ -212,18 +211,13 @@ await as("agentA", async (page, go) => {
   await page.waitForTimeout(2000);
   const f = await readDoc("followUps/F1");
   check(f?.scheduledAt === "2030-02-01T14:30" && f?.rescheduleCount === 1 && f?.rescheduleLog?.[0]?.reason === "العميل طلب أكلمه بعد الإجازة" && f?.rescheduleLog?.[0]?.from === "2026-01-05", "rescheduling saved the new date, the count and the reason");
-  await page.locator("article", { hasText: "متابعة عرض السعر" }).locator("select[aria-label='أولوية المتابعة']").selectOption("high");
-  await page.waitForTimeout(1500);
-  check((await readDoc("followUps/F1"))?.priority === "high", "priority saved");
   await card.getByRole("button", { name: "اشترى من مكان تاني" }).click();
   await page.locator('[role="dialog"] textarea').fill("من محل جنبه");
   await page.getByRole("button", { name: "تأكيد" }).click();
   await page.waitForTimeout(2000);
   const done = await readDoc("followUps/F1");
   check(done?.status === "completed" && done?.outcomeResult?.includes("اشترى من مكان تاني"), "«bought elsewhere» closes the follow-up with the reason");
-  await page.getByRole("button", { name: /خطة شلبي اليوم/ }).click();
-  await page.waitForTimeout(800);
-  check((await main.innerText()).includes("خطة شلبي النهارده"), "the daily plan tab opens and shows a plan built from the user's data");
+  check(!(await main.innerText()).includes("خطة شلبي") && (await main.getByRole("button", { name: "المتابعات" }).count()) === 0, "the follow-up screen is one simple list (no plan, suggestions or reminder tabs)");
 });
 
 await as("bm1", async (page, go) => {
@@ -277,46 +271,6 @@ await as("gm", async (page, go) => {
   check(t?.amount === 12000 && t?.history?.length === 1, "saving the form updated the target and kept its history");
 });
 
-// بيان بيع: a salesperson uploads an Excel file; the branch manager sees it, another branch does not.
-await as("agentA", async (page, go) => {
-  await go("بيان بيع");
-  const xlsx = makeXlsx([["مؤسسة شلبي"], ["العميل", "المبلغ", "رقم الفاتورة"], ["عميل 1", 1200, 501], ["عميل 2", 800.5, 502]]);
-  await page.locator('input[type="file"]').setInputFiles({ name: "october.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: xlsx });
-  const dialog = page.getByRole("dialog", { name: "رفع بيان بيع" });
-  await dialog.waitFor({ timeout: 5000 });
-  check((await dialog.innerText()).includes("عميل 2"), "the upload shows a preview of the Excel rows");
-  await dialog.getByRole("button", { name: "رفع البيان" }).click();
-  await page.waitForTimeout(2000);
-  let docs = [];
-  await env.withSecurityRulesDisabled(async (ctx) => {
-    docs = (await getDocs(collection(ctx.firestore(), "salesStatements"))).docs.map((d) => d.data());
-  });
-  const s = docs.find((d) => d.fileName === "october.xlsx");
-  check(!!s && s.rowCount === 2 && s.branchId === "b1" && s.uploadedById === "usr-agentA", "the statement was saved for the salesperson's branch");
-  check(JSON.stringify(s?.totals) === JSON.stringify([{ column: "المبلغ", sum: 2000.5 }]), "the amount column was totalled (and the invoice numbers were not)");
-  const rows = s && (await readDoc(`salesStatementRows/${s.id}`));
-  check(rows?.rowsJson?.includes("عميل 1"), "the rows were stored");
-  await page.getByRole("button", { name: "عرض october" }).click();
-  const view = page.getByRole("dialog", { name: "october" });
-  await view.getByText("عميل 2").waitFor({ timeout: 5000 });
-  check((await view.innerText()).includes("2,000.5"), "the viewer shows the rows and the total");
-  if (process.env.SHOTS) {
-    await page.screenshot({ path: `${process.env.SHOTS}/statement-view.png` });
-    await view.getByRole("button", { name: "إغلاق" }).click();
-    await page.screenshot({ path: `${process.env.SHOTS}/statements.png` });
-  }
-});
-
-await as("bm1", async (page, go) => {
-  await go("بيان بيع");
-  check((await page.locator("main").innerText()).includes("october"), "the branch manager sees the salesperson's statement");
-});
-
-await as("agentC", async (page, go) => {
-  await go("بيان بيع");
-  check(!(await page.locator("main").innerText()).includes("october"), "another branch's salesperson does not see it");
-});
-
 // Telegram groups: the owner adds the group the bot is in, opens its chat inside the CRM and replies.
 await as("gm", async (page, go) => {
   await go("جروبات التليجرام");
@@ -348,7 +302,37 @@ await as("agentA", async (page, go) => {
   check((await main.getByRole("button", { name: "افتح الشات" }).count()) === 1 && (await main.getByRole("button", { name: "ضيفه" }).count()) === 0, "a salesperson opens the chat but does not manage groups");
 });
 
-const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "الهيكل الإداري", "الأقسام والفروع", "مصفوفة الصلاحيات", "قسم المطورين"];
+// A customer who bought, entered by a salesperson of the other branch (so the first branch's targets stay as they are).
+await as("agentC", async (page, go) => {
+  // A customer who bought: typed items (price x pieces, or a direct amount) and the overall total.
+  await go("العملاء");
+  await page.getByRole("button", { name: /عميل جديد/ }).first().click();
+  await page.waitForTimeout(800);
+  await page.locator("input[name=customerName]").fill("عميل اشترى");
+  await page.locator("input[name=customerPhone]").fill("01066666666");
+  const src = await page.locator("label", { hasText: "عرفنا منين" }).locator("select").innerText();
+  check(!src.includes("زيارة الفرع") && !src.includes("معرض") && src.includes("فيسبوك"), "the source list no longer has branch visit or exhibition");
+  await page.locator("summary", { hasText: "نتيجة التعامل" }).click();
+  await page.getByRole("button", { name: /^اشترى/ }).click();
+  await page.getByRole("button", { name: "أضف صنف" }).click();
+  await page.getByLabel("اسم الصنف 1").fill("كرسي");
+  await page.getByLabel("سعر القطعة 1").fill("150");
+  await page.getByLabel("عدد القطع 1").fill("2");
+  check((await page.getByLabel("إجمالي الصنف 1").inputValue()) === "300", "the item total is worked out from price x pieces");
+  await page.getByRole("button", { name: "أضف صنف" }).click();
+  await page.getByLabel("اسم الصنف 2").fill("طاولة");
+  await page.getByLabel("إجمالي الصنف 2").fill("1200");
+  check((await page.locator(".purchase-total").innerText()).includes("1,500"), "the overall total adds the items");
+  await page.getByRole("button", { name: /حفظ العميل/ }).click();
+  await page.waitForTimeout(2500);
+  let bought = [];
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    bought = (await getDocs(collection(ctx.firestore(), "bookings"))).docs.map((d) => d.data()).filter((b) => b.leadName === "عميل اشترى");
+  });
+  check(bought.length === 1 && bought[0].amount === 1500 && bought[0].courseName === "كرسي + طاولة" && bought[0].lines?.length === 2 && bought[0].lines[0].total === 300, "the purchase was saved with its items and total");
+});
+
+const RETIRED = ["الزيارات", "التقييمات والشكاوى", "المشتريات", "كبار العملاء والوسطاء", "الوسطاء والشركاء", "التقارير", "الحسابات", "الهيكل الإداري", "الأقسام والفروع", "مصفوفة الصلاحيات", "قسم المطورين", "بيان بيع"];
 
 await as("gm", async (page) => {
   const aside = await page.locator("aside").textContent();

@@ -34,6 +34,8 @@ export const sourceNames: Record<Lead["source"], string> = {
   exhibition: "معرض",
   other: "مصدر آخر",
 };
+/** The sources a salesperson can pick today (older customers may still carry walk_in or exhibition). */
+export const selectableSources: Lead["source"][] = ["facebook", "instagram", "google", "referral", "phone_inquiry", "whatsapp", "other"];
 export { positionNames as roleNames } from "./permissions";
 export { canSeeBranch } from "./access";
 export const isManagement = (user: User) =>

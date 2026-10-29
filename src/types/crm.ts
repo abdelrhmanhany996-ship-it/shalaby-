@@ -367,6 +367,8 @@ export interface Booking {
   amount: number;
   paymentStatus?: PaymentStatus; // legacy: payments are handled by the accounts team
   departmentAmounts?: Partial<Record<Department, number>>; // purchase split across the 4 departments
+  /** What was bought, line by line (optional; typed by the salesperson). */
+  lines?: PurchaseLine[];
   bookingStatus: BookingStatus;
   source: LeadSource;
   notes: string;
@@ -433,6 +435,16 @@ export interface PurchaseCategory {
   name: string;
   code: string;
   active: boolean;
+}
+
+/** One thing a customer bought, typed by hand (products are not registered in the system). */
+export interface PurchaseLine {
+  name: string;
+  /** Price of one piece, when the salesperson typed it. */
+  price?: number;
+  qty?: number;
+  /** price x qty when both are given, otherwise the amount typed directly. */
+  total: number;
 }
 
 export interface InvoiceLineItem {

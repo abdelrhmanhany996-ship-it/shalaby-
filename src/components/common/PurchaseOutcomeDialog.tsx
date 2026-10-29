@@ -4,7 +4,7 @@ import { useCRM } from "../../context/CRMContext";
 import { useDialog } from "./useDialog";
 import { VoiceNoteField } from "./VoiceNoteField";
 import {
-  notBoughtReasons,
+  selectableReasons,
   toggleReason,
   type NotBoughtReasonId,
 } from "../../lib/notBought";
@@ -94,7 +94,7 @@ export function PurchaseOutcomeDialog({ lead, agentId, canBook, onBought, onClos
                 ليه لسه؟ <em>اختار سبب أو اتنين</em>
               </span>
               <div className="reason-chips" role="group" aria-label="سبب عدم الشراء">
-                {notBoughtReasons.map((r) => (
+                {selectableReasons.map((r) => (
                   <button
                     type="button"
                     key={r.id}
@@ -135,7 +135,7 @@ export function PurchaseOutcomeDialog({ lead, agentId, canBook, onBought, onClos
                 value={note}
                 onChange={setNote}
                 placeholder="اكتب أو اتكلم: إيه اللي حصل مع العميل؟"
-                reasons={notBoughtReasons.filter((r) => r.id !== "unknown" && r.id !== "other")}
+                reasons={selectableReasons.filter((r) => r.id !== "unknown" && r.id !== "other")}
                 onSuggestReason={(id) =>
                   setReasons((cur) =>
                     cur.length ? cur : toggleReason(cur, id as NotBoughtReasonId),

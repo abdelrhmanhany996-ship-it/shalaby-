@@ -40,7 +40,9 @@ export function buildCustomerBrief({ lead, visits, followUps, bookings, notBough
     },
     purchases: myBookings.map((b) => ({
       date: b.bookingDate,
+      what: b.courseName,
       totalEGP: b.amount,
+      items: (b.lines ?? []).slice(0, 20).map((l) => ({ product: l.name, pricePerPieceEGP: l.price ?? null, pieces: l.qty ?? null, totalEGP: l.total })),
       byDepartmentEGP: Object.fromEntries(Object.entries(bookingSplit(b)).filter(([, v]) => v > 0).map(([k, v]) => [departmentNames[k as keyof typeof departmentNames], v])),
     })),
     visits: visits

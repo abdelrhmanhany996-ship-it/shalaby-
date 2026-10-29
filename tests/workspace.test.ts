@@ -631,9 +631,9 @@ test("telegram groups: managers change the directory, salespeople only read it, 
 test("the simplified CRM keeps customers, follow-ups and targets, and retires the other screens for everyone", () => {
   for (const actor of [director, developer, manager, employee]) {
     const u = fixture(actor).view.effectiveUser;
-    for (const page of ["visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports", "accounts", "branches", "permissions", "developer", "dept_dashboard", "teams"])
+    for (const page of ["visits", "record_visit", "feedback", "bookings", "invoices", "overview", "brokers", "reports", "accounts", "branches", "permissions", "developer", "sales_statements", "dept_dashboard", "teams"])
       assert.equal(canAccessPage(u, page), false, `${actor.role}: ${page} is retired`);
-    for (const page of ["dashboard", "followups", "targets", "settings", "telegram", "sales_statements"]) assert.equal(canAccessPage(u, page), true, `${actor.role}: ${page} stays`);
+    for (const page of ["dashboard", "followups", "targets", "settings", "telegram"]) assert.equal(canAccessPage(u, page), true, `${actor.role}: ${page} stays`);
   }
   assert.equal(canAccessPage(fixture(employee).view.effectiveUser, "clients"), true);
   assert.equal(canAccessPage(fixture(developer).view.effectiveUser, "users"), true);

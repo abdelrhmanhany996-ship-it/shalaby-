@@ -799,7 +799,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
       notes: `رشّحه العميل ${from.name}`,
       referredByLeadId: from.id,
       referredByName: from.name,
-    });
+    }, false);
     addFollowUp({
       leadId: lead.id,
       leadName: lead.name,
@@ -869,7 +869,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Lead CRUD
   const AUTO_FOLLOWUP_DAYS = 2;
-  const addLead = (leadData: Omit<Lead, "id" | "createdAt">): Lead => {
+  const POST_SALE_FOLLOWUPS_OFF = true;
+  const addLead = (leadData: Omit<Lead, "id" | "createdAt">, autoFollowUp = true): Lead => {
     const id = `ld-${crypto.randomUUID()}`;
     const branch = branches.find((b) => b.id === leadData.branchId);
     const agent = users.find((u) => u.id === leadData.assignedAgentId);
@@ -904,7 +905,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     // Every new customer gets a first follow-up two days after registration (closed by itself if they buy).
-    if (newLead.assignedAgentId && newLead.status !== "booked") {
+    if (autoFollowUp && newLead.assignedAgentId && newLead.status !== "booked") {
       addFollowUp({
         leadId: id,
         leadName: newLead.name,
@@ -1406,6 +1407,8 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
   // Booking Operations
   /** The post-sale follow-ups still ahead for a purchase, with fixed ids so doing it twice can never double them. */
   const postSaleFollowUps = (booking: Booking, have: Set<string | undefined>): FollowUp[] => {
+    // The follow-up system is now one follow-up after registration; purchases no longer schedule post-sale ones.
+    if (POST_SALE_FOLLOWUPS_OFF) return [];
     const lead = leads.find((l) => l.id === booking.leadId);
     const agentId = users.some((u) => u.id === booking.agentId) ? booking.agentId : lead?.assignedAgentId || booking.agentId;
     return upcomingPostSale(booking.bookingDate, today(), have).map((m) => ({
@@ -1513,20 +1516,6 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({
       title: `لسه ما اشترى: ${labels}`,
       details: data.note || "",
     });
-    if (data.reasons.includes("unknown") && data.agentId) {
-      addFollowUp({
-        leadId: data.leadId,
-        leadName: data.leadName,
-        leadPhone: leads.find((l) => l.id === data.leadId)?.phone || "",
-        assignedAgentId: data.agentId,
-        branchId: data.branchId,
-        origin: "auto",
-        scheduledAt: addToDate(today(), { days: unknownReasonFollowUpDays }),
-        reason: unknownReasonQuestion,
-        type: "call",
-        notes: "",
-      });
-    }
     logAudit("سبب عدم الشراء", "عميل", data.leadId, `${data.leadName}: ${labels}`);
     return record;
   };

@@ -1,20 +1,26 @@
 import { CheckCircle2, CircleHelp, Hourglass } from "lucide-react";
-import type { InvoiceLineItem } from "../../types/crm";
-import { PurchaseCategorySelector } from "./PurchaseCategorySelector";
+import type { InvoiceLineItem, PurchaseLine } from "../../types/crm";
+import { PurchaseDetails } from "./PurchaseDetails";
+import { SALE_CATEGORY } from "./PurchaseCategorySelector";
+import { grandTotal } from "../../lib/purchaseLines";
 import { VoiceNoteField } from "./VoiceNoteField";
-import { notBoughtReasons, toggleReason, type NotBoughtReasonId } from "../../lib/notBought";
+import { selectableReasons, toggleReason, type NotBoughtReasonId } from "../../lib/notBought";
 
 export type OutcomeResult = "" | "bought" | "not_yet" | "inquiry";
 
 export interface OutcomeState {
   result: OutcomeResult;
+  /** The sale as one amount (kept in the shape purchase records always used). */
   items: InvoiceLineItem[];
+  /** Optional typed items, and the total typed directly while there are none. */
+  lines: PurchaseLine[];
+  direct: string;
   reasons: NotBoughtReasonId[];
   otherText: string;
   note: string;
 }
 
-export const emptyOutcome: OutcomeState = { result: "", items: [], reasons: [], otherText: "", note: "" };
+export const emptyOutcome: OutcomeState = { result: "", items: [], lines: [], direct: "", reasons: [], otherText: "", note: "" };
 
 /** What the visit list and the customer file show for each result. */
 export const outcomeLabel: Record<Exclude<OutcomeResult, "">, string> = {
@@ -27,7 +33,7 @@ export const outcomeLabel: Record<Exclude<OutcomeResult, "">, string> = {
 export function outcomeError(o: OutcomeState, required: boolean): string {
   if (!o.result) return required ? "اختار نتيجة الزيارة: اشترى، لسه، أو استفسار فقط." : "";
   if (o.result === "bought" && (!o.items.length || o.items.some((i) => !(Number(i.amount) > 0))))
-    return "دوس على القسم اللي اشترى منه واكتب المبلغ.";
+    return "اكتب إجمالي الشراء (أكبر من صفر).";
   if (o.result === "not_yet") {
     if (!o.reasons.length) return "اختار سبب إنه لسه ما اشترى، أو «مش عارف» لو العميل ما قالش.";
     if (o.reasons.includes("other") && !o.otherText.trim()) return "اكتب السبب في خانة «أخرى».";
@@ -36,7 +42,7 @@ export function outcomeError(o: OutcomeState, required: boolean): string {
 }
 
 const choices: { id: Exclude<OutcomeResult, "">; title: string; hint: string; Icon: typeof CheckCircle2 }[] = [
-  { id: "bought", title: "اشترى", hint: "ونحدد من أنهي قسم", Icon: CheckCircle2 },
+  { id: "bought", title: "اشترى", hint: "ونسجل إجمالي الشراء", Icon: CheckCircle2 },
   { id: "not_yet", title: "لسه ما اشترى", hint: "ونسجل السبب دلوقتي", Icon: Hourglass },
   { id: "inquiry", title: "استفسار فقط", hint: "من غير سبب", Icon: CircleHelp },
 ];
@@ -75,11 +81,13 @@ export function OutcomeSection({
       {value.result === "bought" && (
         <>
           {boughtHint && <p className="quiet-note">{boughtHint}</p>}
-          <PurchaseCategorySelector
-            items={value.items}
-            onChange={(items) => set({ items })}
-            title="اشترى بكام؟"
-            subtitle="اكتب المبلغ اللي دفعه بالجنيه"
+          <PurchaseDetails
+            lines={value.lines}
+            direct={value.direct}
+            onChange={({ lines, direct }) => {
+              const amount = lines.length ? grandTotal(lines) : Math.max(0, parseFloat(direct) || 0);
+              set({ lines, direct, items: amount > 0 ? [{ categoryId: SALE_CATEGORY.id, categoryName: SALE_CATEGORY.name, amount }] : [] });
+            }}
           />
         </>
       )}
@@ -91,7 +99,7 @@ export function OutcomeSection({
               ليه لسه؟ <em>اختار سبب أو اتنين</em>
             </span>
             <div className="reason-chips" role="group" aria-label="سبب عدم الشراء">
-              {notBoughtReasons.map((r) => (
+              {selectableReasons.map((r) => (
                 <button
                   type="button"
                   key={r.id}
@@ -112,9 +120,6 @@ export function OutcomeSection({
               <input value={value.otherText} onChange={(e) => set({ otherText: e.target.value })} placeholder="اكتب السبب بكلمتين" />
             </label>
           )}
-          {value.reasons.includes("unknown") && (
-            <p className="quiet-note">مفيش مشكلة. هنجدول متابعة بعد يومين فيها سؤال جاهز للعميل عن السبب.</p>
-          )}
           <div className="field">
             <span>
               ملاحظة <em className="optional-tag">اختياري</em>
@@ -123,7 +128,7 @@ export function OutcomeSection({
               value={value.note}
               onChange={(note) => set({ note })}
               placeholder="اكتب أو اتكلم: إيه اللي حصل مع العميل؟"
-              reasons={notBoughtReasons.filter((r) => r.id !== "unknown" && r.id !== "other")}
+              reasons={selectableReasons.filter((r) => r.id !== "unknown" && r.id !== "other")}
               onSuggestReason={(id) => !value.reasons.length && set({ reasons: toggleReason(value.reasons, id as NotBoughtReasonId) })}
             />
           </div>

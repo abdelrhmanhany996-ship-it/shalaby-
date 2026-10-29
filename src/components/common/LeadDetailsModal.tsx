@@ -2,6 +2,8 @@ import { BrokerSearch } from "./BrokerSearch";
 import { CustomerBrief } from "./CustomerBrief";
 import { buildTimeline, dayLabel, timeLabel, timelineGroupLabels, type TimelineGroup } from "../../lib/timeline";
 import { departmentIds, bookingSplit } from "../../lib/purchases";
+import { cleanLines, describeLine, grandTotal, productsLabel } from "../../lib/purchaseLines";
+import { PurchaseDetails } from "./PurchaseDetails";
 import {
   canEditCustomer,
   canContactCustomer,
@@ -33,7 +35,7 @@ import {
   UserRound,
   CheckCircle2,
 } from "lucide-react";
-import type { Lead, Department, LeadStatus, Booking } from "../../types/crm";
+import type { Lead, Department, LeadStatus, Booking, PurchaseLine } from "../../types/crm";
 import { useCRM } from "../../context/CRMContext";
 import {
   statusNames,
@@ -113,6 +115,8 @@ export function LeadDetailsModal({
   const [reason, setReason] = useState("");
   const [followTime, setFollowTime] = useState("");
   const [followPriority, setFollowPriority] = useState<FollowUpPriority>("normal");
+  const [saleLines, setSaleLines] = useState<PurchaseLine[]>([]);
+  const [saleDirect, setSaleDirect] = useState("");
   const [deptAmounts, setDeptAmounts] = useState<Record<Department, string>>({
     construction: "",
     decor: "",
@@ -306,18 +310,14 @@ export function LeadDetailsModal({
       setTab("visits");
     }
     if (action === "booking") {
-      const parts = departmentIds
-        .map((id) => [id, Number(deptAmounts[id] || 0)] as const)
-        .filter(([, v]) => v !== 0);
-      if (
-        !parts.length ||
-        parts.some(([, v]) => !Number.isFinite(v) || v < 0)
-      ) {
-        setFeedback("اكتب قيمة البيع (أكبر من صفر).");
+      const kept = cleanLines(saleLines);
+      const total = kept.length ? grandTotal(kept) : Math.max(0, parseFloat(saleDirect) || 0);
+      if (!(total > 0)) {
+        setFeedback("اكتب إجمالي الشراء (أكبر من صفر).");
         return;
       }
-      const total = parts.reduce((s, [, v]) => s + v, 0);
-      const primary = [...parts].sort((a, b) => b[1] - a[1])[0][0];
+      const parts: [Department, number][] = [["general", total]];
+      const primary: Department = "general";
       addBooking({
         leadId: lead.id,
         leadName: lead.name,
@@ -327,7 +327,8 @@ export function LeadDetailsModal({
         department: primary,
         courseId: parts.length === 1 ? `ps-${primary}` : "ps-multi",
         // A sale is one amount now; older records may still carry a split, which is kept as it was.
-        courseName: parts.length === 1 && primary === "general" ? "عملية بيع" : parts.map(([id]) => departmentNames[id]).join(" + "),
+        courseName: productsLabel(kept),
+        ...(kept.length ? { lines: kept } : {}),
         bookingDate: today(),
         amount: total,
         departmentAmounts: Object.fromEntries(parts),
@@ -335,7 +336,8 @@ export function LeadDetailsModal({
         source: lead.source,
         notes: note.trim(),
       });
-      setDeptAmounts({ construction: "", decor: "", garden: "", general: "" });
+      setSaleLines([]);
+      setSaleDirect("");
       setTab("bookings");
     }
     if (action === "reassign") {
@@ -661,21 +663,9 @@ export function LeadDetailsModal({
                 )}
                 {action === "booking" && (
                   <>
-                    <label className="field">
-                      <span>
-                        قيمة البيع (ج.م) <em>مطلوب</em>
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        step=".01"
-                        inputMode="decimal"
-                        dir="ltr"
-                        placeholder="0"
-                        value={deptAmounts.general}
-                        onChange={(e) => setDeptAmounts((prev) => ({ ...prev, general: e.target.value }))}
-                      />
-                    </label>
+                    <div className="full-width">
+                      <PurchaseDetails lines={saleLines} direct={saleDirect} onChange={({ lines, direct }) => (setSaleLines(lines), setSaleDirect(direct))} />
+                    </div>
                   </>
                 )}
                 {["reassign", "followup", "booking", "visit"].includes(
@@ -975,6 +965,13 @@ export function LeadDetailsModal({
                     <p>
                       {formatMoney(b.amount)} ج.م · {b.bookingDate}
                     </p>
+                    {b.lines?.length ? (
+                      <ul className="purchase-lines-list">
+                        {b.lines.map((l, i) => (
+                          <li key={i}>{describeLine(l)}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                     {departmentIds.filter((id) => bookingSplit(b)[id] > 0)
                       .length > 1 && (
                       <p>

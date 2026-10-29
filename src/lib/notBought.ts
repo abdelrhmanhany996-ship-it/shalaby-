@@ -23,6 +23,15 @@ export const notBoughtReasons: { id: NotBoughtReasonId; label: string }[] = [
   { id: "unknown", label: "مش عارف / العميل ما قالش" },
 ];
 
+/**
+ * The reasons a salesperson can pick today. Older records may carry the others (needs_approval, service),
+ * so their labels stay in the full list above and old reports still read correctly.
+ */
+const retiredReasons: NotBoughtReasonId[] = ["needs_approval", "service"];
+export const selectableReasons = notBoughtReasons
+  .filter((r) => !retiredReasons.includes(r.id))
+  .map((r) => (r.id === "unavailable" ? { ...r, label: "المنتج مش متوفر" } : r));
+
 export const reasonLabel = (id: NotBoughtReasonId) =>
   notBoughtReasons.find((r) => r.id === id)?.label ?? id;
 

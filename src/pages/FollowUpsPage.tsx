@@ -224,10 +224,6 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
           </button>
         )}
         <span className="followup-pills">
-          {priorityOf(f) !== "normal" && (
-            <span className={`status-pill ${priorityOf(f) === "high" ? "is-new" : ""}`}>أولوية {priorityNames[priorityOf(f)]}</span>
-          )}
-          <span className="status-pill">{originLabel[originOf(f)]}</span>
           <span className={`status-pill ${section === "overdue" ? "is-new" : section === "done" ? "is-success" : section === "due" ? "is-warning" : ""}`}>
             {section === "overdue" ? "متأخرة" : section === "due" ? "النهارده" : section === "upcoming" ? "قادمة" : followUpStatus(f) === "cancelled" ? "ملغاة" : "تمت"}
           </span>
@@ -258,18 +254,12 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
         </p>
       )}
       {f.referralNote && <p>ترشيحات: {f.referralNote}</p>}
-      {section !== "done" && !isPostSale(f) ? (
+      {section !== "done" && (
         <div className="followup-four">
           {canBook(f) && (
-            <button className="btn-secondary btn-buy" onClick={() => onOpenLead(f.leadId, "booking")}>
+            <button className="btn-primary btn-buy" onClick={() => onOpenLead(f.leadId, "booking")}>
               <ShoppingBag size={15} />
-              اشترى
-            </button>
-          )}
-          {canCompleteFollowUp(effectiveUser, f) && (
-            <button className="btn-primary" onClick={() => openResult(f)}>
-              <Phone size={15} />
-              هتواصل معاه
+              اشترى مننا
             </button>
           )}
           {canCompleteFollowUp(effectiveUser, f) && canEditLead(f) && (
@@ -291,37 +281,19 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
             </button>
           )}
         </div>
-      ) : (
-        section !== "done" && (
-          <div className="followup-actions">
-            {canCompleteFollowUp(effectiveUser, f) && (
-              <button className="btn-primary" onClick={() => openResult(f)}>
-                <Check size={15} />
-                تسجيل النتيجة
-              </button>
-            )}
-            {canManageFollowUp(effectiveUser, f) && (
-              <button className="btn-secondary" onClick={() => openMove(f)}>
-                <CalendarClock size={14} />
-                تحديد معاد
-              </button>
-            )}
-          </div>
-        )
       )}
       <div className="followup-links">
-        {section !== "done" && canManageFollowUp(effectiveUser, f) && (
-          <select
-            aria-label="أولوية المتابعة"
-            value={priorityOf(f)}
-            onChange={(e) => updateFollowUpDetails(f.id, { priority: e.target.value as FollowUpPriority })}
-          >
-            {(["high", "normal", "low"] as const).map((p) => (
-              <option key={p} value={p}>
-                أولوية {priorityNames[p]}
-              </option>
-            ))}
-          </select>
+        {section !== "done" && canContact(f) && (
+          <>
+            <a className="btn-text" href={`tel:${phoneNumber(f.leadPhone)}`}>
+              <Phone size={14} />
+              اتصال
+            </a>
+            <a className="btn-text" href={`https://wa.me/${phoneNumber(leadOf(f)?.whatsappPhone || f.leadPhone)}`} target="_blank" rel="noreferrer">
+              <MessageCircle size={14} />
+              واتساب
+            </a>
+          </>
         )}
         {canAccessPage(effectiveUser, "clients") && f.category !== "post_sale" && f.leadId && (() => {
           const last = lastOutcome(f.leadId, bookings, notBoughtRecords);
@@ -441,7 +413,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
           <h1>المتابعات</h1>
           <p>
             {worksOwnCustomers(effectiveUser)
-              ? "ابدأ بالمتأخر، وبعدين النهارده. سجّل نتيجة كل تواصل."
+              ? "بعد تسجيل العميل بيومين بتظهر متابعته هنا: اشترى مننا، اشترى من مكان تاني، أو حدد معاد جديد."
               : "راجع التأخير والموظف المسؤول عن كل متابعة داخل نطاقك."}
           </p>
         </div>
@@ -452,69 +424,8 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
         </p>
       )}
       <PageGuide id="followups" />
-      <div className="tab-filter" role="group" aria-label="أقسام المتابعات" style={{ marginBottom: 12 }}>
-        <button aria-pressed={view === "followups"} onClick={() => setView("followups")}>
-          المتابعات
-          {overdueList.length > 0 && <span className="tab-alert">{overdueList.length} متأخرة</span>}
-        </button>
-        <button aria-pressed={view === "plan"} onClick={() => setView("plan")}>
-          خطة شلبي اليوم
-        </button>
-        <button aria-pressed={view === "suggestions"} onClick={() => setView("suggestions")}>
-          اقتراحات شلبي
-          {aiSuggestions.filter((x) => x.status === "pending" && x.agentId === effectiveUser.id).length > 0 && (
-            <span className="tab-alert" style={{ background: "var(--wait)", color: "#3b2600" }}>
-              {aiSuggestions.filter((x) => x.status === "pending" && x.agentId === effectiveUser.id).length} جديد
-            </span>
-          )}
-        </button>
-      </div>
-
-      {view === "reminders" && (
+      {(
         <section className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>تذكيرات ({tasks.length})</h2>
-              <p>حاجات المفروض تعملها: طلبات التقييم، تذكير العملاء، وترشيحات لسه ما اتسجلتش. بتختفي لوحدها لما تتعمل، أو دوس «تمت».</p>
-            </div>
-          </div>
-          {tasks.length ? tasks.map(reminderCard) : (
-            <div className="empty-state">
-              <Check size={28} strokeWidth={1.3} />
-              <h3>مفيش تذكيرات عليك دلوقتي</h3>
-              <p>كل حاجة اتعملت. ✓</p>
-            </div>
-          )}
-        </section>
-      )}
-
-      {view === "plan" && <DailyPlan onOpenLead={onOpenLead} />}
-
-      {view === "suggestions" && <SuggestionsTab onOpenLead={onOpenLead} />}
-
-      {view === "followups" && (
-        <section className="panel">
-          {(myReminders.length > 0 || notifState === "default") && (
-            <div className={`notice ${myUrgent ? "warning" : ""}`} role="status" style={{ margin: "0 0 12px" }}>
-              <Bell size={15} style={{ verticalAlign: "middle", marginInlineEnd: 6 }} />
-              {myReminders.length > 0 ? (
-                <>
-                  عليك <strong>{myUrgent}</strong> متابعة محتاجة تحرّك دلوقتي (متأخرة أو ميعادها قرّب) و<strong>{myReminders.length - myUrgent}</strong> النهارده.{" "}
-                </>
-              ) : (
-                <>التذكيرات بتتحسب من مواعيد متابعاتك. </>
-              )}
-              {notifState === "granted" ? (
-                <span className="table-secondary">إشعارات المتصفح شغّالة، لكنها بتصلك طول ما التطبيق مفتوح بس.</span>
-              ) : notifState === "default" ? (
-                <button className="btn-text" onClick={enableNotifications}>
-                  فعّل إشعارات المتصفح (بتشتغل والتطبيق مفتوح بس)
-                </button>
-              ) : notifState === "denied" ? (
-                <span className="table-secondary">إشعارات المتصفح مقفولة من إعدادات المتصفح. التذكير هنا بيظهر لما تفتح الصفحة.</span>
-              ) : null}
-            </div>
-          )}
           <div className="metric-grid" style={{ marginBottom: 16 }}>
             {(
               [
@@ -534,7 +445,6 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
             search={{ value: q, onChange: setQ, placeholder: "ابحث باسم العميل أو رقمه أو سبب المتابعة…" }}
             selects={[
               { id: "branch", label: "الفرع", value: fBranch, onChange: setFBranch, allLabel: "كل الفروع", primary: true, options: uniq(followUps.map((f) => f.branchId)).map((id) => ({ value: id, label: branches.find((b) => b.id === id)?.name || id })) },
-              { id: "priority", label: "الأولوية", value: fPriority, onChange: (v: string) => setFPriority(v as "all" | FollowUpPriority), allLabel: "كل الأولويات", options: (["high", "normal", "low"] as const).map((p) => ({ value: p, label: priorityNames[p] })) },
               { id: "agent", label: "الموظف", value: fAgent, onChange: setFAgent, allLabel: "كل الموظفين", primary: !worksOwnCustomers(effectiveUser), options: uniq(followUps.map((f) => f.assignedAgentId)).map((id) => ({ value: id, label: followUps.find((f) => f.assignedAgentId === id)?.assignedAgentName || id })) },
             ]}
             dates={{ from: fFrom, to: fTo, onFrom: setFFrom, onTo: setFTo, label: "موعد المتابعة" }}
@@ -542,31 +452,11 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
               setQ("");
               setFBranch("all");
               setFAgent("all");
-              setFPriority("all");
               setBucket("open");
               setFFrom("");
               setFTo("");
             }}
           />
-          <div className="tab-filter" role="group" aria-label="مين جدولها" style={{ marginBottom: 10 }}>
-            {(
-              [
-                ["all", "الكل"],
-                ["manual", "جدولها السيلز بنفسه"],
-                ["auto", "تلقائية من السيستم"],
-                ["zaki", "من اقتراحات شلبي"],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} aria-pressed={origin === id} onClick={() => setOrigin(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {rated.length > 0 && origin !== "manual" && (
-            <p className="table-secondary" style={{ marginBottom: 10 }}>
-              متوسط رضا العملاء بعد التسليم: <strong>{avgRating.toFixed(1)}</strong> / 5 من {rated.length} تقييم
-            </p>
-          )}
           {!overdueList.length && !todayList.length && !upcomingList.length && (
             <div className="empty-state">
               <Clock3 size={28} strokeWidth={1.3} />
@@ -574,7 +464,7 @@ export function FollowUpsPage({ onOpenLead, initialTab = "due" }: Props) {
               <p>المتابعات المتاحة حسب صلاحياتك تظهر هنا.</p>
             </div>
           )}
-          {(bucket === "open" || bucket === "overdue") && section("متأخرة: ابدأ بيها", overdueList, "overdue", "عدّى موعدها. كلّم العميل أو أجّل بسبب مكتوب.")}
+          {(bucket === "open" || bucket === "overdue") && section("متأخرة: ابدأ بيها", overdueList, "overdue", "عدّى موعدها. حدد إنه اشترى، أو حدد معاد جديد.")}
           {(bucket === "open" || bucket === "today") && section("النهارده", todayList, "due")}
           {(bucket === "open" || bucket === "upcoming") && section("قادمة", upcomingList, "upcoming")}
           {bucket === "completed" && (

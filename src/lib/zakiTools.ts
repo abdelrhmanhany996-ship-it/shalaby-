@@ -184,7 +184,7 @@ export function runTool(name: string, a: Args, d: ToolData): unknown {
         byDepartmentEGP: c ? byDeptNames(c.split) : {},
         purchases: d.bookings
           .filter((b) => b.leadId === l.id)
-          .map((b) => ({ date: b.bookingDate, totalEGP: b.amount, byDepartmentEGP: byDeptNames(bookingSplit(b)), cancelled: b.bookingStatus === "cancelled" })),
+          .map((b) => ({ date: b.bookingDate, what: b.courseName, totalEGP: b.amount, items: (b.lines ?? []).slice(0, 20).map((l) => ({ product: l.name, pricePerPieceEGP: l.price ?? null, pieces: l.qty ?? null, totalEGP: l.total })), byDepartmentEGP: byDeptNames(bookingSplit(b)), cancelled: b.bookingStatus === "cancelled" })),
         followUps: d.followUps
           .filter((f) => f.leadId === l.id)
           .sort((x, y) => x.scheduledAt.localeCompare(y.scheduledAt))
