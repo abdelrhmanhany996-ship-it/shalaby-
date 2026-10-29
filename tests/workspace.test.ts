@@ -563,9 +563,9 @@ test("targets: managers set them inside their branch, never their own, a salespe
 
   const owner = mk(director);
   owner.view.setEmployeeTarget(employee.id, "2026-10", 1);
-  assert.throws(() => owner.view.setEmployeeTarget(director.id, "2026-10", 1), "the owner does not sell, so has no target");
+  owner.view.setEmployeeTarget(director.id, "2026-10", 1); // targets apply to everyone, the owner included
   owner.view.updateTargetSettings({ behindBelow: 50 });
-  assert.deepEqual(owner.calls, ["setEmployeeTarget", "updateTargetSettings"]);
+  assert.deepEqual(owner.calls, ["setEmployeeTarget", "setEmployeeTarget", "updateTargetSettings"]);
   // a salesperson is not a valid target subject unless they sell
   assert.throws(() => owner.view.setEmployeeTarget("nobody", "2026-10", 1));
 });

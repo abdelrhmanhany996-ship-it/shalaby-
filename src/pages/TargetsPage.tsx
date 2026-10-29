@@ -4,7 +4,7 @@ import { useCRM } from "../context/CRMContext";
 import { hasPermission, isSalesCapable } from "../lib/permissions";
 import { formatMoney, today } from "../lib/presentation";
 import { bucketOf } from "../lib/followUps";
-import { achievedFor, evaluate, monthOf, overview, shiftMonth, targetId, targetStateNames, type Performance, type TargetState } from "../lib/targets";
+import { achievedFor, evaluate, monthOf, overview, shiftMonth, targetId, targetable, targetStateNames, type Performance, type TargetState } from "../lib/targets";
 
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString("ar-EG", { month: "long", year: "numeric", timeZone: "UTC" });
 const stateColor: Record<TargetState, string> = {
@@ -34,7 +34,7 @@ export function TargetsPage() {
   const canView = hasPermission(effectiveUser, "targets.view");
   const canManage = hasPermission(effectiveUser, "targets.manage");
   const canConfigure = canManage && ["admin", "general_manager", "regional_manager"].includes(effectiveUser.role);
-  const sells = isSalesCapable(effectiveUser);
+  const sells = targetable(effectiveUser);
   const now = today();
   const [month, setMonth] = useState(monthOf(now));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -290,7 +290,7 @@ export function TargetsPage() {
                     const a = achievedFor(r.user.id, month, bookings, targetSettings);
                     const stored = employeeTargets.find((t) => t.id === targetId(r.user.id, month));
                     const draft = drafts[r.user.id];
-                    const canSet = canManage && (r.user.id !== effectiveUser.id || ["admin", "general_manager"].includes(effectiveUser.role));
+                    const canSet = canManage && (r.user.id !== effectiveUser.id || ["admin", "general_manager"].includes(effectiveUser.role)) && (r.user.role !== "general_manager" || ["admin", "general_manager"].includes(effectiveUser.role));
                     return (
                       <Fragment key={r.user.id}>
                         <tr>

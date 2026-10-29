@@ -5,7 +5,7 @@ import { canAccessPage, canCreateCustomer, worksOwnCustomers } from "../lib/acce
 import { hasPermission, isSalesCapable } from "../lib/permissions";
 import { bucketize, priorityNames, priorityOf } from "../lib/followUps";
 import { formatMoney, today } from "../lib/presentation";
-import { monthOf, overview, targetStateNames } from "../lib/targets";
+import { monthOf, overview, targetable, targetStateNames } from "../lib/targets";
 import { openShalaby } from "../components/zaki/shalabyEvents";
 
 interface Props {
@@ -163,7 +163,7 @@ export function HomePage({ setActiveTab, onOpenLead }: Props) {
                 <p>حدد أهداف الموظفين من صفحة الأهداف.</p>
               </div>
             )
-          ) : isSalesCapable(effectiveUser) && mine?.target ? (
+          ) : targetable(effectiveUser) && mine?.target ? (
             <div style={{ padding: "0 20px 20px" }}>
               <p>
                 <strong>{pct(mine.percent)}</strong> · {targetStateNames[mine.state]}

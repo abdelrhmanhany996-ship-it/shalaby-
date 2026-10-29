@@ -9,7 +9,7 @@ import { chromium } from "playwright-core";
 import { makeXlsx } from "./xlsx-fixture.mjs";
 
 const DIST = process.env.APP_DIST;
-const PROJECT = "shalaby-group";
+const PROJECT = "shalaby-crm-eg";
 const env = await initializeTestEnvironment({ projectId: PROJECT, firestore: { rules: readFileSync(new URL("../firestore.rules", import.meta.url), "utf8"), host: "127.0.0.1", port: 8181 } });
 await env.clearFirestore();
 

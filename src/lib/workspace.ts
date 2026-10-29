@@ -1,5 +1,6 @@
 import { branchLimitMessage, branchQuota, userLimitMessage, userQuota } from "./license";
 import { hasPermission, isDirector, isSalesCapable, withPermissions } from "./permissions";
+import { targetable } from "./targets";
 import type { CRMContextType } from "../context/CRMContext";
 import type { Lead, User, UserRole } from "../types/crm";
 import * as access from "./access";
@@ -469,7 +470,9 @@ export function createWorkspace(raw: CRMContextType) {
     setEmployeeTarget: ((userId, month, amount, note) => {
       require(hasPermission(actor, "targets.manage"));
       const target = targetUsers.find((u) => u.id === userId);
-      require(!!target && target.active && isSalesCapable(target));
+      require(!!target && targetable(target));
+      // Only the owner (or the developer) sets the owner's target.
+      require(target!.role !== "general_manager" || isDirector(actor));
       // Nobody sets their own target, except the owner and the developer.
       require(userId !== actor.id || isDirector(actor));
       return raw.setEmployeeTarget(userId, month, amount, note);

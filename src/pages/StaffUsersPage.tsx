@@ -200,7 +200,7 @@ export const StaffUsersPage: React.FC = () => {
   // Monthly target: for people who sell, set by someone allowed to manage targets (never by the person themself, except the owner).
   const canSetTarget =
     hasPermission(effectiveUser, "targets.manage") &&
-    isSalesCapable({ role }) &&
+    role !== "admin" &&
     (!editingUser || editingUser.id !== effectiveUser.id || isDirector(effectiveUser));
   const targetFor = (userId: string, month: string) => employeeTargets.find((t) => t.id === targetId(userId, month));
 

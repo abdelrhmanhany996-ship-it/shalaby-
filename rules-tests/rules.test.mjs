@@ -373,3 +373,14 @@ test("sales statements: uploaded into your own branch as yourself; salespeople r
   await assertSucceeds(setDoc(doc(db("agentA"), "salesStatements", "O1"), statement("agentA")));
   await assertSucceeds(deleteDoc(doc(db("agentA"), "salesStatements", "O1")), "the uploader removes their own");
 });
+
+test("targets for people who cover every branch are stored without a branch; only top management reads and writes them", async () => {
+  const row = { id: `tgt-${userId("regional")}-2026-10`, userId: userId("regional"), userName: "r", branchId: "", month: "2026-10", amount: 9000 };
+  await assertSucceeds(setDoc(doc(db("gm"), "employeeTargets", row.id), row));
+  await assertFails(setDoc(doc(db("bm1"), "employeeTargets", row.id + "x"), { ...row, id: row.id + "x" }));
+  await assertSucceeds(getDoc(doc(db("regional"), "employeeTargets", row.id)));
+  await assertFails(getDoc(doc(db("bm1"), "employeeTargets", row.id)));
+  await assertFails(getDoc(doc(db("agentA"), "employeeTargets", row.id)));
+  const own = { ...row, id: `tgt-${userId("gm")}-2026-10`, userId: userId("gm") };
+  await assertSucceeds(setDoc(doc(db("gm"), "employeeTargets", own.id), own), "the owner sets their own target");
+});

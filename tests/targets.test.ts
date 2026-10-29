@@ -61,7 +61,8 @@ test("overview: each employee once, different targets, and a reconciling 'others
   const targets = [{ id: targetId("u1", "2026-10"), userId: "u1", month: "2026-10", amount: 2000 }, { id: targetId("u2", "2026-10"), userId: "u2", month: "2026-10", amount: 8000 }] as EmployeeTarget[];
   const bookings = [booking({ amount: 1000 }), booking({ id: "b2", agentId: "u2", amount: 2000 }), booking({ id: "b3", agentId: "gone", amount: 700 })];
   const o = overview(users, targets, bookings, "2026-10", "2026-10-31", S);
-  assert.deepEqual(o.rows.map((r) => [r.user.id, r.target, r.achieved]).sort(), [["u1", 2000, 1000], ["u2", 8000, 2000]]);
+  // everyone active has a row (the supervisor too, with no target yet); the inactive one does not
+  assert.deepEqual(o.rows.map((r) => [r.user.id, r.target, r.achieved]).sort(), [["hr", 0, 0], ["u1", 2000, 1000], ["u2", 8000, 2000]]);
   assert.deepEqual(o.total, { target: 10000, achieved: 3000, remaining: 7000, percent: 30 });
   assert.equal(o.otherAchieved, 700);
   // total sales in scope = listed + others
@@ -90,4 +91,11 @@ test("month history lists the previous months oldest first with real figures", (
   const b = [booking({ id: "x", bookingDate: "2026-08-10", amount: 500 }), booking({ id: "y", bookingDate: "2026-09-10", amount: 2500 })];
   const h = monthHistory("u1", "2026-10", 3, t, b, "2026-10-15", S);
   assert.deepEqual(h.map((x) => [x.month, x.target, x.achieved, x.percent, x.state]), [["2026-07", 0, 0, 0, "no_target"], ["2026-08", 1000, 500, 50, "missed"], ["2026-09", 2000, 2500, 125, "achieved"]]);
+});
+
+test("people who work across all branches get a target row without a branch", () => {
+  const by = { id: "m", name: "المالك" };
+  const t = withAmount(undefined, { id: "o1", name: "المالك", branchId: undefined, role: "general_manager" } as never, "2026-10", 50000, undefined, by, "t");
+  assert.equal(t.branchId, "");
+  assert.throws(() => withAmount(undefined, { id: "s1", name: "سيلز", branchId: undefined, role: "sales_agent" } as never, "2026-10", 1, undefined, by, "t"));
 });

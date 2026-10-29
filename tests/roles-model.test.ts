@@ -19,7 +19,7 @@ test("role names follow the business: owner, general sales manager, branch sales
 
 test("who creates whom: developer anyone, owner the sales side, the general sales manager nobody, a branch manager their salespeople", () => {
   const withManage = (x: User) => ({ ...x, permissions: ["staff.manage", "staff.view", "branches.view"] }) as User;
-  assert.deepEqual(assignableRoles(u("dev", "admin")), ["general_manager", "regional_manager", "branch_manager", "sales_agent", "admin"]);
+  assert.deepEqual(assignableRoles(u("dev", "admin")), ["general_manager", "regional_manager", "branch_manager", "sales_agent"]); // no new developer accounts from the form
   assert.deepEqual(assignableRoles(owner), ["regional_manager", "branch_manager", "sales_agent"]);
   assert.deepEqual(assignableRoles(withManage(gsm)), []); // the owner adds managers
 });

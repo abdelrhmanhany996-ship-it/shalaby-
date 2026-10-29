@@ -22,9 +22,9 @@ test("the developer section is retired for everyone", () => {
   assert.ok(!canAccessPage(branchManager, "developer"));
 });
 
-test("only the developer creates managers (and other developers)", () => {
+test("only the developer creates managers; nobody creates developer accounts from the form", () => {
   assert.ok(assignableRoles(developer).includes("general_manager"));
-  assert.ok(assignableRoles(developer).includes("admin"));
+  assert.ok(!assignableRoles(developer).includes("admin"));
   assert.ok(!assignableRoles(manager).includes("general_manager"));
   assert.ok(!assignableRoles(manager).includes("admin"));
   assert.ok(assignableRoles(manager).includes("branch_manager"));

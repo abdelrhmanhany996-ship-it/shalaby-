@@ -5,7 +5,7 @@
   "description": "Firestore security rules tests against the local emulator (kept apart from the app because of the emulator tooling).",
   "scripts": {
     "test": "cp ../firestore.rules . && firebase emulators:exec --project demo-shalaby --only firestore \"node --test rules.test.mjs\"",
-    "e2e": "cp ../firestore.rules . && firebase emulators:exec --project shalaby-group --only firestore,auth \"node app-e2e.mjs\""
+    "e2e": "cp ../firestore.rules . && firebase emulators:exec --project shalaby-crm-eg --only firestore,auth \"node app-e2e.mjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",

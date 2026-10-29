@@ -136,8 +136,10 @@ export interface TargetRow extends Performance {
   hasRow: boolean;
 }
 
-/** The people targets apply to: active staff who sell. */
-export const targetable = (u: User) => u.active && isSalesCapable(u);
+/** The people targets apply to: every active staff member, the owner included (the developer account is not staff). */
+export const targetable = (u: Pick<User, "active" | "role">) => u.active && u.role !== "admin";
+/** People who work across all branches have no branch; their target row is stored without one. */
+const crossBranch = (u: Pick<User, "role">) => ["general_manager", "regional_manager"].includes(u.role);
 
 /**
  * One row per employee for the month: their own target (or the default), what they achieved, and how that stands.
@@ -170,7 +172,7 @@ const stateRank: Record<TargetState, number> = { behind: 0, missed: 1, on_track:
 /** The target row after setting the amount: a new one, or the existing one with the change recorded. */
 export function withAmount(
   existing: EmployeeTarget | undefined,
-  user: Pick<User, "id" | "name" | "branchId">,
+  user: Pick<User, "id" | "name" | "branchId" | "role">,
   month: string,
   amount: number,
   note: string | undefined,
@@ -179,17 +181,18 @@ export function withAmount(
 ): EmployeeTarget {
   if (!isMonth(month)) throw new Error("الشهر غير صحيح.");
   if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000_000) throw new Error("قيمة الهدف غير صحيحة.");
-  if (!user.branchId) throw new Error("الموظف ده مالوش فرع، حدد فرعه الأول.");
+  if (!user.branchId && !crossBranch(user)) throw new Error("الموظف ده مالوش فرع، حدد فرعه الأول.");
+  const branchId = user.branchId || "";
   const clean = note?.trim() || undefined;
   if (!existing) {
-    return { id: targetId(user.id, month), userId: user.id, userName: user.name, branchId: user.branchId, month, amount, ...(clean ? { note: clean } : {}), setById: by.id, setByName: by.name, createdAt: now, updatedAt: now, history: [] };
+    return { id: targetId(user.id, month), userId: user.id, userName: user.name, branchId, month, amount, ...(clean ? { note: clean } : {}), setById: by.id, setByName: by.name, createdAt: now, updatedAt: now, history: [] };
   }
   return {
     ...existing,
     amount,
     note: clean,
     userName: user.name,
-    branchId: user.branchId,
+    branchId,
     setById: by.id,
     setByName: by.name,
     updatedAt: now,

@@ -181,7 +181,7 @@ export const assignableRoles = (u: User): UserRole[] =>
   !canManageStaff(u)
     ? []
     : u.role === "admin"
-      ? (["general_manager", "regional_manager", "branch_manager", "sales_agent", "admin"] as UserRole[])
+      ? (["general_manager", "regional_manager", "branch_manager", "sales_agent"] as UserRole[])
       : isDirector(u)
         ? ["regional_manager", "branch_manager", "sales_agent"]
         : u.role === "regional_manager"

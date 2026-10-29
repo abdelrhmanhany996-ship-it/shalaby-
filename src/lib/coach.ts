@@ -3,7 +3,7 @@ import { notBoughtReasons } from "./notBought";
 import { bucketOf, priorityOf, timeOfDay } from "./followUps";
 import { lastOutcome } from "./purchases";
 import { statusNames } from "./presentation";
-import { monthOf, overview, targetStateNames } from "./targets";
+import { monthOf, overview, targetable, targetStateNames } from "./targets";
 import { isSalesCapable } from "./permissions";
 
 /**
@@ -122,7 +122,7 @@ export function buildCoachSnapshot(i: CoachInput): CoachSnapshot {
   // Target performance: everyone sees their own; people who may see targets see their team's.
   const o = overview(i.users, i.targets, i.bookings, month, i.today, i.targetSettings);
   const mineRow = o.rows.find((r) => r.user.id === i.user.id);
-  const me = isSalesCapable(i.user)
+  const me = targetable(i.user)
     ? mineRow
       ? { target: mineRow.target, achievedEGP: mineRow.achieved, percent: mineRow.percent, remainingEGP: mineRow.remaining, expectedPercentByToday: mineRow.expectedPercent, state: targetStateNames[mineRow.state], hasTarget: mineRow.target > 0 }
       : undefined
