@@ -126,7 +126,8 @@ function Rich({ text }: { text: string }) {
 export function ZakiChat() {
   const { currentUser, effectiveUser, leads, bookings, followUps, visits, notBoughtRecords, brokers, users, branches, reviewRequests, reviewNotes, employeeTargets, targetSettings, accountEntries, accountingSettings, targetUsers, quotes, addLead, addBooking, findDuplicateLeadsByPhone, saveQuote, setQuoteStatus, acceptQuote, addFollowUp, updateFollowUpResult, rescheduleFollowUp, updateLead, addTimelineEvent, setEmployeeTarget, reassignLead } = useCRM();
   const canWriteCustomer = canCreateCustomer(effectiveUser);
-  const canWriteSale = hasPermission(effectiveUser, "bookings.create") && isSalesCapable(effectiveUser);
+  // Same rule as the sale screen: whoever may record purchases (the owner and developer too, on their team's customers).
+  const canWriteSale = hasPermission(effectiveUser, "bookings.create");
   const canWriteQuote = hasPermission(effectiveUser, "customers.edit") && canAccessPage(effectiveUser, "quotes");
   const canWriteFollowUp = hasPermission(effectiveUser, "followups.create") || hasPermission(effectiveUser, "followups.complete");
   const canWriteNote = hasPermission(effectiveUser, "customers.edit");
