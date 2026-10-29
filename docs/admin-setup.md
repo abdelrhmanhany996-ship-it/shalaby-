@@ -44,3 +44,12 @@
 - **تجربة بدون حفظ:** `php api/weekly.php --dry` بيطبع التقرير بس. ولفترة معينة: `--from=2026-10-24 --to=2026-10-30`.
 - **تليجرام (اختياري):** ملف `crm-weekly.php` جنب `public_html`: `<?php return ['telegram_chat_id' => '-100…'];` والبوت متظبط (`crm-telegram-secrets.php`).
 - لازم تنشر `firestore.rules` (فيها `weeklyReports` للقراءة بس).
+
+## تعيين مطوّر (super admin)
+المطوّر (`role: admin`) فوق المالك. مفيش زرار لده في الواجهة عن قصد. من السيرفر (بعد وجود `crm-firebase-admin.json`):
+`php api/make-developer.php --email=saber.gd.fl@gmail.com` (أو `--dry` للتجربة). لو الحساب مش موجود بيتعمل بباسورد عشوائي مش بيظهر لحد، والشخص يدوس «نسيت كلمة المرور؟» ويختار باسورده من اللينك اللي يوصله على الإيميل. أدوار الخدمة المطلوبة: Firebase Authentication Admin وCloud Datastore User.
+**بدون السكربت (من Firebase Console):** Authentication ← Add user بالإيميل ← انسخ الـ UID، وبعدين Firestore: `authProfiles/<UID>` بالحقول `uid, email, loginId, name, userId=UID, role="admin", active=true`، و`users/<UID>` بالحقول `id=UID, name, email, phone, role="admin", active=true, createdAt, authUid=UID`.
+
+## أسماء الدخول والباسورد
+- اسم الدخول = **رقم الموبايل** (الحقل «رقم الهاتف التواصل»). داخليًا بيتحول لـ `<الرقم>@staff.shalaby.local` ومبيتبعتلوش حاجة. الإيميل في الفورم اختياري وللتواصل بس، مش للدخول. الحسابات اللي بإيميل حقيقي (المطوّر) بتدخل بالإيميل.
+- مفيش باسورد افتراضي. اللي بيعمل الحساب بيكتب باسورد (8 أحرف على الأقل)، ولو سابها فاضية مبيتعملش حساب دخول. «إعادة تعيين كلمة المرور» بتولّد باسورد عشوائي يظهر مرة واحدة والموظف بيختار باسوره الخاص أول ما يدخل.
